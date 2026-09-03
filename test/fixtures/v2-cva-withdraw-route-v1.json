@@ -1,0 +1,56 @@
+{
+  "version": 2,
+  "cases": [
+    {
+      "name": "valid idle route survives unavailable market candidate",
+      "vault": {
+        "total_cva_shares": "200000000",
+        "total_allocation_value_usd": "100000000",
+        "idle_long_amount": "0",
+        "idle_short_amount": "300000000",
+        "min_cva_withdraw_usd": "0",
+        "max_cva_withdraw_usd_per_call": "0",
+        "cva_burn_spread_bps": "0"
+      },
+      "allocation": {
+        "market_id": "7",
+        "lp_share_amount": "100000000",
+        "last_mark_value_usd": "100000000",
+        "max_withdraw_usd_per_call": "200000000",
+        "min_weight_bps": "0",
+        "max_deposit_usd_per_call": "200000000",
+        "max_weight_bps": "10000",
+        "status": "1"
+      },
+      "pool": {
+        "long_pool_amount": "0",
+        "short_pool_amount": "100000000",
+        "market_share_supply": "100000000",
+        "position_impact_pool_qty": "0",
+        "lent_position_impact_pool_qty": "0"
+      },
+      "market_overrides": {
+        "position_conversion_scale": "1000000000000000"
+      },
+      "prices": {
+        "index_price": "50000000000000000",
+        "index_price_min": "50000000000000000",
+        "index_price_max": "50000000000000000",
+        "long_price": "50000000000000000",
+        "long_price_min": "50000000000000000",
+        "long_price_max": "50000000000000000",
+        "short_price": "1000000000000",
+        "short_price_min": "1000000000000",
+        "short_price_max": "1000000000000"
+      },
+      "share_amount": "100000000",
+      "expected": {
+        "route_type": "idle",
+        "idle_long_amount_out": "0",
+        "idle_short_amount_out": "200000000",
+        "unavailable_market_id": "7",
+        "unavailable_reason": "market_value_insufficient"
+      }
+    }
+  ]
+}

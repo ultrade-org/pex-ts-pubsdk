@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "fixture_kind": "pdex-v2-admission-liquidation-consistency-independent-integer-vectors",
+  "units": {
+    "usd": "Amount6",
+    "price": "Price12",
+    "collateral_amount": "asset base units"
+  },
+  "base_requests": {
+    "near_liquidation_long": {
+      "side": 0,
+      "size_usd": 110000000,
+      "size_tokens": 133824699,
+      "collateral_amount_after_cost_resolution": 5533982,
+      "same_token_credit_amount": 0,
+      "entry_price": 82197083813,
+      "current_price": 81731947625,
+      "collateral_price": 1000000000000,
+      "position_conversion_scale": 100000000000,
+      "close_fee_bps": 6,
+      "min_collateral_usd": 5000000,
+      "maintenance_margin_bps": 250,
+      "max_liquidation_impact_bps": 50,
+      "raw_negative_impact_usd": 0,
+      "accrued_cost_usd": 0
+    },
+    "flat_long": {
+      "side": 0,
+      "size_usd": 100000000,
+      "size_tokens": 10000000,
+      "collateral_amount_after_cost_resolution": 10000000,
+      "same_token_credit_amount": 0,
+      "entry_price": 1000000000000,
+      "current_price": 1000000000000,
+      "collateral_price": 1000000000000,
+      "position_conversion_scale": 100000000000,
+      "close_fee_bps": 10,
+      "min_collateral_usd": 5000000,
+      "maintenance_margin_bps": 250,
+      "max_liquidation_impact_bps": 50,
+      "raw_negative_impact_usd": 0,
+      "accrued_cost_usd": 0
+    },
+    "flat_short": {
+      "side": 1,
+      "size_usd": 100000000,
+      "size_tokens": 10000000,
+      "collateral_amount_after_cost_resolution": 10000000,
+      "same_token_credit_amount": 0,
+      "entry_price": 1000000000000,
+      "current_price": 1000000000000,
+      "collateral_price": 1000000000000,
+      "position_conversion_scale": 100000000000,
+      "close_fee_bps": 10,
+      "min_collateral_usd": 5000000,
+      "maintenance_margin_bps": 250,
+      "max_liquidation_impact_bps": 50,
+      "raw_negative_impact_usd": 0,
+      "accrued_cost_usd": 0
+    }
+  },
+  "vectors": [
+    {
+      "id": "near-liquidation-long",
+      "base": "near_liquidation_long",
+      "expected": {
+        "loss_usd": 622467,
+        "close_fee_usd": 66000,
+        "remaining_usd": 4845515,
+        "maintenance_requirement_usd": 2750000,
+        "below_min_collateral": true,
+        "liquidatable": true,
+        "healthy": false
+      }
+    },
+    {
+      "id": "minimum-collateral-one-unit-below",
+      "base": "near_liquidation_long",
+      "overrides": {"collateral_amount_after_cost_resolution": 5688466},
+      "expected": {"remaining_usd": 4999999, "liquidatable": true}
+    },
+    {
+      "id": "minimum-collateral-exact",
+      "base": "near_liquidation_long",
+      "overrides": {"collateral_amount_after_cost_resolution": 5688467},
+      "expected": {"remaining_usd": 5000000, "liquidatable": false, "healthy": true}
+    },
+    {
+      "id": "minimum-collateral-one-unit-above",
+      "base": "near_liquidation_long",
+      "overrides": {"collateral_amount_after_cost_resolution": 5688468},
+      "expected": {"remaining_usd": 5000001, "liquidatable": false}
+    },
+    {
+      "id": "maintenance-one-unit-below",
+      "base": "near_liquidation_long",
+      "overrides": {"collateral_amount_after_cost_resolution": 3438466, "min_collateral_usd": 1},
+      "expected": {"remaining_usd": 2749999, "maintenance_requirement_usd": 2750000, "below_maintenance": true, "liquidatable": true}
+    },
+    {
+      "id": "maintenance-exact",
+      "base": "near_liquidation_long",
+      "overrides": {"collateral_amount_after_cost_resolution": 3438467, "min_collateral_usd": 1},
+      "expected": {"remaining_usd": 2750000, "maintenance_requirement_usd": 2750000, "liquidatable": false}
+    },
+    {
+      "id": "credits-equal-costs",
+      "base": "flat_long",
+      "overrides": {"collateral_amount_after_cost_resolution": 100000, "min_collateral_usd": 1},
+      "expected": {"credits_usd": 100000, "costs_usd": 100000, "below_or_equal_costs": true, "liquidatable": true}
+    },
+    {
+      "id": "negative-impact-cap",
+      "base": "flat_long",
+      "overrides": {"raw_negative_impact_usd": 900000},
+      "expected": {"capped_negative_impact_usd": 500000, "costs_usd": 600000, "remaining_usd": 9400000, "liquidatable": false}
+    },
+    {
+      "id": "accrued-cost-counted",
+      "base": "flat_long",
+      "overrides": {"accrued_cost_usd": 5000000},
+      "expected": {"costs_usd": 5100000, "remaining_usd": 4900000, "below_min_collateral": true, "liquidatable": true}
+    },
+    {
+      "id": "same-token-credit-counted",
+      "base": "flat_long",
+      "overrides": {"collateral_amount_after_cost_resolution": 5000000, "same_token_credit_amount": 100001},
+      "expected": {"collateral_value_usd": 5100001, "remaining_usd": 5000001, "liquidatable": false}
+    },
+    {
+      "id": "short-adverse-pnl",
+      "base": "flat_short",
+      "overrides": {"current_price": 1005000000000},
+      "expected": {"loss_usd": 500000, "remaining_usd": 9400000, "liquidatable": false}
+    },
+    {
+      "id": "long-favorable-pnl",
+      "base": "flat_long",
+      "overrides": {"current_price": 1005000000000},
+      "expected": {"profit_usd": 500000, "credits_usd": 10500000, "remaining_usd": 10400000, "liquidatable": false}
+    }
+  ]
+}

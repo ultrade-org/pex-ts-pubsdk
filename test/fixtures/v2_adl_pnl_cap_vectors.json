@@ -1,0 +1,183 @@
+{
+  "schema_version": 2,
+  "ordering_vectors": [
+    {
+      "id": "standard_synthetic",
+      "deposit_bps": 6000,
+      "withdrawal_bps": 4500,
+      "trader_bps": 6000,
+      "adl_trigger_bps": 5500,
+      "post_adl_floor_bps": 5000,
+      "valid": true
+    },
+    {
+      "id": "base_market",
+      "deposit_bps": 9000,
+      "withdrawal_bps": 7000,
+      "trader_bps": 9000,
+      "adl_trigger_bps": 8500,
+      "post_adl_floor_bps": 7700,
+      "valid": true
+    },
+    {
+      "id": "all_equal_boundary",
+      "deposit_bps": 5000,
+      "withdrawal_bps": 5000,
+      "trader_bps": 5000,
+      "adl_trigger_bps": 5000,
+      "post_adl_floor_bps": 5000,
+      "valid": true
+    },
+    {
+      "id": "invalid_deposit_withdrawal_order",
+      "deposit_bps": 4500,
+      "withdrawal_bps": 5000,
+      "trader_bps": 6000,
+      "adl_trigger_bps": 5500,
+      "post_adl_floor_bps": 5000,
+      "valid": false
+    },
+    {
+      "id": "withdrawal_above_floor",
+      "deposit_bps": 6000,
+      "withdrawal_bps": 5001,
+      "trader_bps": 6000,
+      "adl_trigger_bps": 5500,
+      "post_adl_floor_bps": 5000,
+      "valid": false
+    },
+    {
+      "id": "floor_above_adl",
+      "deposit_bps": 6000,
+      "withdrawal_bps": 4500,
+      "trader_bps": 6000,
+      "adl_trigger_bps": 5500,
+      "post_adl_floor_bps": 5501,
+      "valid": false
+    },
+    {
+      "id": "adl_above_deposit",
+      "deposit_bps": 5499,
+      "withdrawal_bps": 4500,
+      "trader_bps": 6000,
+      "adl_trigger_bps": 5500,
+      "post_adl_floor_bps": 5000,
+      "valid": false
+    },
+    {
+      "id": "deposit_above_trader",
+      "deposit_bps": 6001,
+      "withdrawal_bps": 4500,
+      "trader_bps": 6000,
+      "adl_trigger_bps": 5500,
+      "post_adl_floor_bps": 5000,
+      "valid": false
+    },
+    {
+      "id": "zero_floor",
+      "deposit_bps": 6000,
+      "withdrawal_bps": 4500,
+      "trader_bps": 6000,
+      "adl_trigger_bps": 5500,
+      "post_adl_floor_bps": 0,
+      "valid": false
+    }
+  ],
+  "settlement_vectors": [
+    {
+      "id": "at_trigger_rejects",
+      "position_profit_usd": 1000000,
+      "side_positive_pnl_usd": 5500000,
+      "adl_trigger_cap_usd": 5500000,
+      "trader_cap_usd": 6000000,
+      "adl_allowed": false,
+      "expected_capped_profit_usd": null
+    },
+    {
+      "id": "trigger_plus_one_below_trader_no_amplification",
+      "position_profit_usd": 1000000,
+      "side_positive_pnl_usd": 5500001,
+      "adl_trigger_cap_usd": 5500000,
+      "trader_cap_usd": 6000000,
+      "adl_allowed": true,
+      "expected_capped_profit_usd": 1000000
+    },
+    {
+      "id": "at_trader_cap_no_scaling",
+      "position_profit_usd": 1000000,
+      "side_positive_pnl_usd": 6000000,
+      "adl_trigger_cap_usd": 5500000,
+      "trader_cap_usd": 6000000,
+      "adl_allowed": true,
+      "expected_capped_profit_usd": 1000000
+    },
+    {
+      "id": "trader_cap_plus_one_floors",
+      "position_profit_usd": 1000000,
+      "side_positive_pnl_usd": 6000001,
+      "adl_trigger_cap_usd": 5500000,
+      "trader_cap_usd": 6000000,
+      "adl_allowed": true,
+      "expected_capped_profit_usd": 999999
+    },
+    {
+      "id": "above_trader_cap_proportional",
+      "position_profit_usd": 3333333,
+      "side_positive_pnl_usd": 9000000,
+      "adl_trigger_cap_usd": 5500000,
+      "trader_cap_usd": 6000000,
+      "adl_allowed": true,
+      "expected_capped_profit_usd": 2222222
+    }
+  ],
+  "post_adl_floor_vectors": [
+    {
+      "id": "post_floor_equality_accepts",
+      "side": "long",
+      "pool_token_amount": 1000,
+      "pool_token_price": 50000000000,
+      "price_scale": 1000000,
+      "position_token_scale": 1000000000,
+      "initial_oi_usd": 100000000,
+      "initial_oi_tokens": 2600000,
+      "size_delta_usd": 16653847,
+      "size_delta_tokens": 433000,
+      "post_adl_floor_bps": 5000,
+      "expected_positive_pnl_usd": 25003847,
+      "expected_factor_bps": 5000,
+      "expected_allowed": true
+    },
+    {
+      "id": "post_floor_plus_one_accepts",
+      "side": "long",
+      "pool_token_amount": 1000,
+      "pool_token_price": 50000000000,
+      "price_scale": 1000000,
+      "position_token_scale": 1000000000,
+      "initial_oi_usd": 100000000,
+      "initial_oi_tokens": 2600000,
+      "size_delta_usd": 16655000,
+      "size_delta_tokens": 433000,
+      "post_adl_floor_bps": 5000,
+      "expected_positive_pnl_usd": 25005000,
+      "expected_factor_bps": 5001,
+      "expected_allowed": true
+    },
+    {
+      "id": "post_floor_minus_one_rejects_unchanged",
+      "side": "long",
+      "pool_token_amount": 1000,
+      "pool_token_price": 50000000000,
+      "price_scale": 1000000,
+      "position_token_scale": 1000000000,
+      "initial_oi_usd": 100000000,
+      "initial_oi_tokens": 2600000,
+      "size_delta_usd": 16695000,
+      "size_delta_tokens": 434000,
+      "post_adl_floor_bps": 5000,
+      "expected_positive_pnl_usd": 24995000,
+      "expected_factor_bps": 4999,
+      "expected_allowed": false
+    }
+  ]
+}

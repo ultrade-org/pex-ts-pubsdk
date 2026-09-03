@@ -1,0 +1,219 @@
+{
+  "schema": "pdex-v2-transaction-materialization-v1",
+  "suggested_params": {
+    "fee": 1000,
+    "first": 100,
+    "last": 1100,
+    "genesis_id": "pdex-cross-sdk-v1",
+    "genesis_hash_b64": "Y2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2M=",
+    "flat_fee": true,
+    "min_fee": 1000
+  },
+  "vectors": [
+    {
+      "id": "ordinary_application",
+      "descriptor": {
+        "type": "appl",
+        "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+        "app_id": 10,
+        "app_name": "App10",
+        "method": "ordinary",
+        "app_args_b64": ["b3JkaW5hcnk="],
+        "foreign_apps": [20],
+        "foreign_assets": [30],
+        "accounts": ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"],
+        "boxes_b64": ["Ym94LTE="],
+        "flat_fee_micro_algos": 2000
+      },
+      "primary_index": 0,
+      "primary_app_name": "App10",
+      "expected": [
+        {
+          "type": "appl",
+          "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+          "fee": 2000,
+          "app_id": 10,
+          "app_args_b64": ["b3JkaW5hcnk="],
+          "foreign_apps": [20],
+          "foreign_assets": [30],
+          "accounts": ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"],
+          "boxes": [[0, "Ym94LTE="]]
+        }
+      ]
+    },
+    {
+      "id": "explicit_mixed_group",
+      "descriptor": {
+        "type": "group",
+        "primary_index": 2,
+        "transactions": [
+          {
+            "type": "pay",
+            "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+            "receiver": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+            "amount": 123,
+            "flat_fee_micro_algos": 1000
+          },
+          {
+            "type": "axfer",
+            "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+            "receiver": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+            "asset_id": 77,
+            "amount": 456,
+            "flat_fee_micro_algos": 1000
+          },
+          {
+            "type": "appl",
+            "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+            "app_id": 11,
+            "app_name": "App11",
+            "method": "primary",
+            "app_args_b64": ["cHJpbWFyeQ=="],
+            "foreign_apps": [],
+            "foreign_assets": [],
+            "accounts": [],
+            "boxes_b64": [],
+            "flat_fee_micro_algos": 3000
+          }
+        ]
+      },
+      "primary_index": 2,
+      "primary_app_name": "App11",
+      "expected": [
+        {
+          "type": "pay",
+          "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+          "fee": 1000,
+          "receiver": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+          "amount": 123
+        },
+        {
+          "type": "axfer",
+          "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+          "fee": 1000,
+          "receiver": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+          "amount": 456,
+          "asset_id": 77
+        },
+        {
+          "type": "appl",
+          "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+          "fee": 3000,
+          "app_id": 11,
+          "app_args_b64": ["cHJpbWFyeQ=="],
+          "foreign_apps": [],
+          "foreign_assets": [],
+          "accounts": [],
+          "boxes": []
+        }
+      ]
+    },
+    {
+      "id": "decorated_application",
+      "descriptor": {
+        "type": "appl",
+        "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+        "app_id": 13,
+        "app_name": "App13",
+        "method": "primary",
+        "app_args_b64": ["cHJpbWFyeQ=="],
+        "foreign_apps": [],
+        "foreign_assets": [],
+        "accounts": [],
+        "boxes_b64": [],
+        "flat_fee_micro_algos": 1000,
+        "active_mark_calls": [
+          {
+            "type": "appl",
+            "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+            "app_id": 12,
+            "app_name": "App12",
+            "method": "mark",
+            "app_args_b64": ["bWFyaw=="],
+            "foreign_apps": [],
+            "foreign_assets": [],
+            "accounts": [],
+            "boxes_b64": [],
+            "flat_fee_micro_algos": 1000
+          }
+        ],
+        "resource_carriers": [
+          {
+            "type": "appl",
+            "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+            "app_id": 14,
+            "app_name": "App14",
+            "method": "carrier-plural",
+            "app_args_b64": ["cGx1cmFs"],
+            "foreign_apps": [],
+            "foreign_assets": [],
+            "accounts": [],
+            "boxes_b64": [],
+            "flat_fee_micro_algos": 1000
+          }
+        ],
+        "resource_carrier": {
+          "type": "appl",
+          "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+          "app_id": 15,
+          "app_name": "App15",
+          "method": "carrier-singular",
+          "app_args_b64": ["c2luZ3VsYXI="],
+          "foreign_apps": [],
+          "foreign_assets": [],
+          "accounts": [],
+          "boxes_b64": [],
+          "flat_fee_micro_algos": 1000
+        }
+      },
+      "primary_index": 1,
+      "primary_app_name": "App13",
+      "expected": [
+        {
+          "type": "appl",
+          "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+          "fee": 1000,
+          "app_id": 12,
+          "app_args_b64": ["bWFyaw=="],
+          "foreign_apps": [],
+          "foreign_assets": [],
+          "accounts": [],
+          "boxes": []
+        },
+        {
+          "type": "appl",
+          "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+          "fee": 1000,
+          "app_id": 13,
+          "app_args_b64": ["cHJpbWFyeQ=="],
+          "foreign_apps": [],
+          "foreign_assets": [],
+          "accounts": [],
+          "boxes": []
+        },
+        {
+          "type": "appl",
+          "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+          "fee": 1000,
+          "app_id": 14,
+          "app_args_b64": ["cGx1cmFs"],
+          "foreign_apps": [],
+          "foreign_assets": [],
+          "accounts": [],
+          "boxes": []
+        },
+        {
+          "type": "appl",
+          "sender": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+          "fee": 1000,
+          "app_id": 15,
+          "app_args_b64": ["c2luZ3VsYXI="],
+          "foreign_apps": [],
+          "foreign_assets": [],
+          "accounts": [],
+          "boxes": []
+        }
+      ]
+    }
+  ]
+}

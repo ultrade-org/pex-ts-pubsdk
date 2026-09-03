@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "vectors": [
+    {
+      "name": "scalar_zero_position_factor",
+      "field": "position_impact_factor_bps",
+      "input": "0",
+      "positive_component_bps": 0,
+      "negative_component_bps": 0,
+      "positive_exponent": 1,
+      "negative_exponent": 1,
+      "accepted": true
+    },
+    {
+      "name": "scalar_max_swap",
+      "field": "max_swap_impact_bps",
+      "input": "9999",
+      "positive_component_bps": 9999,
+      "negative_component_bps": 9999,
+      "positive_exponent": 1,
+      "negative_exponent": 1,
+      "accepted": true
+    },
+    {
+      "name": "scalar_swap_one_above_max",
+      "field": "max_swap_impact_bps",
+      "input": "10000",
+      "positive_component_bps": 10000,
+      "negative_component_bps": 10000,
+      "positive_exponent": 1,
+      "negative_exponent": 1,
+      "accepted": false
+    },
+    {
+      "name": "packed_asymmetric_valid",
+      "field": "max_position_impact_bps",
+      "input": "1002001000200000100",
+      "positive_component_bps": 100,
+      "negative_component_bps": 200,
+      "positive_exponent": 1,
+      "negative_exponent": 2,
+      "accepted": true
+    },
+    {
+      "name": "packed_positive_exceeds_negative",
+      "field": "position_impact_factor_bps",
+      "input": "1001001000100000200",
+      "positive_component_bps": 200,
+      "negative_component_bps": 100,
+      "positive_exponent": 1,
+      "negative_exponent": 1,
+      "accepted": false
+    },
+    {
+      "name": "packed_zero_positive_exponent",
+      "field": "swap_impact_factor_bps",
+      "input": "1001000000100000100",
+      "positive_component_bps": 100,
+      "negative_component_bps": 100,
+      "positive_exponent": 0,
+      "negative_exponent": 1,
+      "accepted": false
+    },
+    {
+      "name": "packed_exponent_above_domain",
+      "field": "max_position_impact_bps",
+      "input": "1001003000100000100",
+      "positive_component_bps": 100,
+      "negative_component_bps": 100,
+      "positive_exponent": 3,
+      "negative_exponent": 1,
+      "accepted": false
+    },
+    {
+      "name": "packed_component_above_bps",
+      "field": "position_impact_factor_bps",
+      "input": "1001001010001010001",
+      "positive_component_bps": 10001,
+      "negative_component_bps": 10001,
+      "positive_exponent": 1,
+      "negative_exponent": 1,
+      "accepted": false
+    },
+    {
+      "name": "packed_position_component_at_bps",
+      "field": "max_position_impact_bps",
+      "input": "1001001010000010000",
+      "positive_component_bps": 10000,
+      "negative_component_bps": 10000,
+      "positive_exponent": 1,
+      "negative_exponent": 1,
+      "accepted": true
+    }
+  ]
+}

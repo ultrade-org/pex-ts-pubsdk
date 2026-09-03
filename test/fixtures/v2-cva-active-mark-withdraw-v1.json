@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "vault": {
+    "total_cva_shares": "100000000",
+    "total_allocation_value_usd": "200000000",
+    "deposit_total_allocation_value_usd": "200000000",
+    "idle_long_amount": "0",
+    "idle_short_amount": "0",
+    "min_cva_withdraw_usd": "0",
+    "max_cva_withdraw_usd_per_call": "0",
+    "cva_burn_spread_bps": "0"
+  },
+  "share_amount": "50000000",
+  "allocations": [
+    {
+      "market_id": "7",
+      "lp_share_amount": "100000000",
+      "last_mark_value_usd": "100000000",
+      "last_deposit_mark_value_usd": "100000000",
+      "max_withdraw_usd_per_call": "500000000",
+      "min_weight_bps": "0",
+      "status": "1"
+    },
+    {
+      "market_id": "8",
+      "lp_share_amount": "100000000",
+      "last_mark_value_usd": "100000000",
+      "last_deposit_mark_value_usd": "100000000",
+      "max_withdraw_usd_per_call": "500000000",
+      "min_weight_bps": "0",
+      "status": "1"
+    }
+  ],
+  "pools": {
+    "7": {
+      "long_pool_amount": "100000000",
+      "short_pool_amount": "100000000",
+      "market_share_supply": "100000000",
+      "position_impact_pool_qty": "0",
+      "lent_position_impact_pool_qty": "0"
+    },
+    "8": {
+      "long_pool_amount": "50000000",
+      "short_pool_amount": "50000000",
+      "market_share_supply": "100000000",
+      "position_impact_pool_qty": "0",
+      "lent_position_impact_pool_qty": "0"
+    }
+  },
+  "prices": {
+    "index_price": "1000000000000",
+    "index_price_min": "1000000000000",
+    "index_price_max": "1000000000000",
+    "long_price": "1000000000000",
+    "long_price_min": "1000000000000",
+    "long_price_max": "1000000000000",
+    "short_price": "1000000000000",
+    "short_price_min": "1000000000000",
+    "short_price_max": "1000000000000"
+  },
+  "expected": {
+    "projected_total_allocation_value_usd": "300000000",
+    "withdraw_value_usd": "150000000",
+    "market_id": "7",
+    "market_share_amount": "75000000",
+    "long_amount_out": "75000000",
+    "short_amount_out": "75000000",
+    "market_mark_value_usd_after": "50000000",
+    "total_nav_usd_after": "150000000",
+    "post_withdraw_weight_bps": "3333"
+  }
+}

@@ -1,0 +1,492 @@
+{
+  "schema": "pdex-v2-cva-allocation-sizing-v2",
+  "oracle_price_scale": 1000000000000,
+  "cases": [
+    {
+      "name": "imbalanced_full_allocation",
+      "input": {
+        "idle_long": 5000000000,
+        "idle_short": 500160443,
+        "max_long": 5000000000,
+        "max_short": 500160443,
+        "long_price_min": 85800000000,
+        "short_price_min": 1000000000000,
+        "target_weight_bps": 10000,
+        "max_deposit_usd_per_call": 10000000000,
+        "pool_long": 30000000000,
+        "pool_short": 3000000
+      },
+      "expected": {
+        "eligible_long": 5000000000,
+        "eligible_short": 500160443,
+        "eligible_value_usd": 929160443,
+        "total_nav_usd": 929160443,
+        "allowed_value_usd": 929160443,
+        "long_amount": 5000000000,
+        "short_amount": 500160443,
+        "actual_value_usd": 929160443,
+        "idle_long_after": 0,
+        "idle_short_after": 0
+      }
+    },
+    {
+      "name": "balanced_below_cap",
+      "input": {
+        "idle_long": 2000,
+        "idle_short": 100000000,
+        "max_long": 2000,
+        "max_short": 100000000,
+        "long_price_min": 50000000000000000,
+        "short_price_min": 1000000000000,
+        "target_weight_bps": 10000,
+        "max_deposit_usd_per_call": 500000000,
+        "pool_long": 1000,
+        "pool_short": 50000000
+      },
+      "expected": {
+        "eligible_long": 2000,
+        "eligible_short": 100000000,
+        "eligible_value_usd": 200000000,
+        "total_nav_usd": 200000000,
+        "allowed_value_usd": 200000000,
+        "long_amount": 2000,
+        "short_amount": 100000000,
+        "actual_value_usd": 200000000,
+        "idle_long_after": 0,
+        "idle_short_after": 0
+      }
+    },
+    {
+      "name": "skewed_pool_below_cap",
+      "input": {
+        "idle_long": 2000,
+        "idle_short": 100000000,
+        "max_long": 2000,
+        "max_short": 100000000,
+        "long_price_min": 50000000000000000,
+        "short_price_min": 1000000000000,
+        "target_weight_bps": 10000,
+        "max_deposit_usd_per_call": 500000000,
+        "pool_long": 5000,
+        "pool_short": 1000000
+      },
+      "expected": {
+        "eligible_long": 2000,
+        "eligible_short": 100000000,
+        "eligible_value_usd": 200000000,
+        "total_nav_usd": 200000000,
+        "allowed_value_usd": 200000000,
+        "long_amount": 2000,
+        "short_amount": 100000000,
+        "actual_value_usd": 200000000,
+        "idle_long_after": 0,
+        "idle_short_after": 0
+      }
+    },
+    {
+      "name": "long_only_below_cap",
+      "input": {
+        "idle_long": 2000,
+        "idle_short": 0,
+        "max_long": 2000,
+        "max_short": 0,
+        "long_price_min": 50000000000000000,
+        "short_price_min": 1000000000000,
+        "target_weight_bps": 10000,
+        "max_deposit_usd_per_call": 500000000,
+        "pool_long": 1000,
+        "pool_short": 50000000
+      },
+      "expected": {
+        "eligible_long": 2000,
+        "eligible_short": 0,
+        "eligible_value_usd": 100000000,
+        "total_nav_usd": 100000000,
+        "allowed_value_usd": 100000000,
+        "long_amount": 2000,
+        "short_amount": 0,
+        "actual_value_usd": 100000000,
+        "idle_long_after": 0,
+        "idle_short_after": 0
+      }
+    },
+    {
+      "name": "short_only_below_cap",
+      "input": {
+        "idle_long": 0,
+        "idle_short": 100000000,
+        "max_long": 0,
+        "max_short": 100000000,
+        "long_price_min": 50000000000000000,
+        "short_price_min": 1000000000000,
+        "target_weight_bps": 10000,
+        "max_deposit_usd_per_call": 500000000,
+        "pool_long": 1000,
+        "pool_short": 50000000
+      },
+      "expected": {
+        "eligible_long": 0,
+        "eligible_short": 100000000,
+        "eligible_value_usd": 100000000,
+        "total_nav_usd": 100000000,
+        "allowed_value_usd": 100000000,
+        "long_amount": 0,
+        "short_amount": 100000000,
+        "actual_value_usd": 100000000,
+        "idle_long_after": 0,
+        "idle_short_after": 0
+      }
+    },
+    {
+      "name": "caller_maxima_bind",
+      "input": {
+        "idle_long": 2000,
+        "idle_short": 100000000,
+        "max_long": 1999,
+        "max_short": 99900000,
+        "long_price_min": 50000000000000000,
+        "short_price_min": 1000000000000,
+        "target_weight_bps": 10000,
+        "max_deposit_usd_per_call": 500000000,
+        "pool_long": 5000,
+        "pool_short": 1000000
+      },
+      "expected": {
+        "eligible_long": 1999,
+        "eligible_short": 99900000,
+        "eligible_value_usd": 199850000,
+        "total_nav_usd": 200000000,
+        "allowed_value_usd": 199850000,
+        "long_amount": 1999,
+        "short_amount": 99900000,
+        "actual_value_usd": 199850000,
+        "idle_long_after": 1,
+        "idle_short_after": 100000
+      }
+    },
+    {
+      "name": "caller_maxima_above_idle",
+      "input": {
+        "idle_long": 2000,
+        "idle_short": 100000000,
+        "max_long": 9999,
+        "max_short": 999000000,
+        "long_price_min": 50000000000000000,
+        "short_price_min": 1000000000000,
+        "target_weight_bps": 10000,
+        "max_deposit_usd_per_call": 500000000,
+        "pool_long": 5000,
+        "pool_short": 1000000
+      },
+      "expected": {
+        "eligible_long": 2000,
+        "eligible_short": 100000000,
+        "eligible_value_usd": 200000000,
+        "total_nav_usd": 200000000,
+        "allowed_value_usd": 200000000,
+        "long_amount": 2000,
+        "short_amount": 100000000,
+        "actual_value_usd": 200000000,
+        "idle_long_after": 0,
+        "idle_short_after": 0
+      }
+    },
+    {
+      "name": "per_call_cap_binds",
+      "input": {
+        "idle_long": 2000,
+        "idle_short": 100000000,
+        "max_long": 2000,
+        "max_short": 100000000,
+        "long_price_min": 50000000000000000,
+        "short_price_min": 1000000000000,
+        "target_weight_bps": 10000,
+        "max_deposit_usd_per_call": 100000000,
+        "pool_long": 5000,
+        "pool_short": 1000000
+      },
+      "expected": {
+        "eligible_long": 2000,
+        "eligible_short": 100000000,
+        "eligible_value_usd": 200000000,
+        "total_nav_usd": 200000000,
+        "allowed_value_usd": 100000000,
+        "long_amount": 1000,
+        "short_amount": 50000000,
+        "actual_value_usd": 100000000,
+        "idle_long_after": 1000,
+        "idle_short_after": 50000000
+      }
+    },
+    {
+      "name": "target_gap_binds",
+      "input": {
+        "idle_long": 2000,
+        "idle_short": 100000000,
+        "max_long": 2000,
+        "max_short": 100000000,
+        "long_price_min": 50000000000000000,
+        "short_price_min": 1000000000000,
+        "target_weight_bps": 5000,
+        "max_deposit_usd_per_call": 500000000,
+        "pool_long": 5000,
+        "pool_short": 1000000
+      },
+      "expected": {
+        "eligible_long": 2000,
+        "eligible_short": 100000000,
+        "eligible_value_usd": 200000000,
+        "total_nav_usd": 200000000,
+        "allowed_value_usd": 100000000,
+        "long_amount": 1000,
+        "short_amount": 50000000,
+        "actual_value_usd": 100000000,
+        "idle_long_after": 1000,
+        "idle_short_after": 50000000
+      }
+    },
+    {
+      "name": "integer_floor_boundary",
+      "input": {
+        "idle_long": 3,
+        "idle_short": 100000000,
+        "max_long": 3,
+        "max_short": 100000000,
+        "long_price_min": 50000000000000000,
+        "short_price_min": 1000000000000,
+        "target_weight_bps": 10000,
+        "max_deposit_usd_per_call": 50000000,
+        "pool_long": 5000,
+        "pool_short": 1000000
+      },
+      "expected": {
+        "eligible_long": 3,
+        "eligible_short": 100000000,
+        "eligible_value_usd": 100150000,
+        "total_nav_usd": 100150000,
+        "allowed_value_usd": 50000000,
+        "long_amount": 1,
+        "short_amount": 49925112,
+        "actual_value_usd": 49975112,
+        "idle_long_after": 2,
+        "idle_short_after": 50074888
+      }
+    },
+    {
+      "name": "random_01",
+      "input": {
+        "idle_long": 1234567,
+        "idle_short": 987654321,
+        "max_long": 1234567,
+        "max_short": 987654321,
+        "long_price_min": 17345678000000,
+        "short_price_min": 1000000000000,
+        "target_weight_bps": 10000,
+        "max_deposit_usd_per_call": 333000000,
+        "pool_long": 81337,
+        "pool_short": 23456789
+      },
+      "expected": {
+        "eligible_long": 1234567,
+        "eligible_short": 987654321,
+        "eligible_value_usd": 1009068722,
+        "total_nav_usd": 1009068722,
+        "allowed_value_usd": 333000000,
+        "long_amount": 407416,
+        "short_amount": 325933092,
+        "actual_value_usd": 332999998,
+        "idle_long_after": 827151,
+        "idle_short_after": 661721229
+      }
+    },
+    {
+      "name": "random_02",
+      "input": {
+        "idle_long": 9876543,
+        "idle_short": 1234567,
+        "max_long": 9876543,
+        "max_short": 1234567,
+        "long_price_min": 2345678000000,
+        "short_price_min": 1001234000000,
+        "target_weight_bps": 10000,
+        "max_deposit_usd_per_call": 7777777,
+        "pool_long": 4444444,
+        "pool_short": 777777
+      },
+      "expected": {
+        "eligible_long": 9876543,
+        "eligible_short": 1234567,
+        "eligible_value_usd": 24403279,
+        "total_nav_usd": 24403279,
+        "allowed_value_usd": 7777777,
+        "long_amount": 3147837,
+        "short_amount": 393479,
+        "actual_value_usd": 7777775,
+        "idle_long_after": 6728706,
+        "idle_short_after": 841088
+      }
+    },
+    {
+      "name": "random_03",
+      "input": {
+        "idle_long": 4444444,
+        "idle_short": 5555555,
+        "max_long": 3333333,
+        "max_short": 4444444,
+        "long_price_min": 9876543000000,
+        "short_price_min": 999999000000,
+        "target_weight_bps": 10000,
+        "max_deposit_usd_per_call": 50000000,
+        "pool_long": 999999,
+        "pool_short": 88888888
+      },
+      "expected": {
+        "eligible_long": 3333333,
+        "eligible_short": 4444444,
+        "eligible_value_usd": 37366245,
+        "total_nav_usd": 49451291,
+        "allowed_value_usd": 37366245,
+        "long_amount": 3333333,
+        "short_amount": 4444444,
+        "actual_value_usd": 37366245,
+        "idle_long_after": 1111111,
+        "idle_short_after": 1111111
+      }
+    },
+    {
+      "name": "random_04",
+      "input": {
+        "idle_long": 77777777,
+        "idle_short": 0,
+        "max_long": 70000000,
+        "max_short": 0,
+        "long_price_min": 123456000000,
+        "short_price_min": 1000000000000,
+        "target_weight_bps": 7500,
+        "max_deposit_usd_per_call": 8000000,
+        "pool_long": 1,
+        "pool_short": 999999999
+      },
+      "expected": {
+        "eligible_long": 70000000,
+        "eligible_short": 0,
+        "eligible_value_usd": 8641920,
+        "total_nav_usd": 9602133,
+        "allowed_value_usd": 7201599,
+        "long_amount": 58333325,
+        "short_amount": 0,
+        "actual_value_usd": 7201598,
+        "idle_long_after": 19444452,
+        "idle_short_after": 0
+      }
+    },
+    {
+      "name": "random_05",
+      "input": {
+        "idle_long": 0,
+        "idle_short": 88888888,
+        "max_long": 0,
+        "max_short": 80000000,
+        "long_price_min": 88888000000,
+        "short_price_min": 1234567000000,
+        "target_weight_bps": 6250,
+        "max_deposit_usd_per_call": 70000000,
+        "pool_long": 999999999,
+        "pool_short": 1
+      },
+      "expected": {
+        "eligible_long": 0,
+        "eligible_short": 80000000,
+        "eligible_value_usd": 98765360,
+        "total_nav_usd": 109739287,
+        "allowed_value_usd": 68587054,
+        "long_amount": 0,
+        "short_amount": 55555554,
+        "actual_value_usd": 68587053,
+        "idle_long_after": 0,
+        "idle_short_after": 33333334
+      }
+    },
+    {
+      "name": "random_06",
+      "input": {
+        "idle_long": 3141592,
+        "idle_short": 2718281,
+        "max_long": 3000000,
+        "max_short": 2000000,
+        "long_price_min": 31415926000000,
+        "short_price_min": 2718281000000,
+        "target_weight_bps": 3333,
+        "max_deposit_usd_per_call": 20000000,
+        "pool_long": 42,
+        "pool_short": 24
+      },
+      "expected": {
+        "eligible_long": 3000000,
+        "eligible_short": 2000000,
+        "eligible_value_usd": 99684340,
+        "total_nav_usd": 106085072,
+        "allowed_value_usd": 20000000,
+        "long_amount": 601899,
+        "short_amount": 401266,
+        "actual_value_usd": 19999967,
+        "idle_long_after": 2539693,
+        "idle_short_after": 2317015
+      }
+    },
+    {
+      "name": "random_07",
+      "input": {
+        "idle_long": 999999,
+        "idle_short": 999999,
+        "max_long": 999999,
+        "max_short": 999999,
+        "long_price_min": 999999000000,
+        "short_price_min": 999999000000,
+        "target_weight_bps": 9999,
+        "max_deposit_usd_per_call": 1111111,
+        "pool_long": 123456,
+        "pool_short": 654321
+      },
+      "expected": {
+        "eligible_long": 999999,
+        "eligible_short": 999999,
+        "eligible_value_usd": 1999996,
+        "total_nav_usd": 1999996,
+        "allowed_value_usd": 1111111,
+        "long_amount": 555556,
+        "short_amount": 555556,
+        "actual_value_usd": 1111110,
+        "idle_long_after": 444443,
+        "idle_short_after": 444443
+      }
+    },
+    {
+      "name": "random_08",
+      "input": {
+        "idle_long": 12345678,
+        "idle_short": 87654321,
+        "max_long": 2345678,
+        "max_short": 7654321,
+        "long_price_min": 7654321000000,
+        "short_price_min": 1111111000000,
+        "target_weight_bps": 10000,
+        "max_deposit_usd_per_call": 25000000,
+        "pool_long": 222222,
+        "pool_short": 333333
+      },
+      "expected": {
+        "eligible_long": 2345678,
+        "eligible_short": 7654321,
+        "eligible_value_usd": 26459372,
+        "total_nav_usd": 191891462,
+        "allowed_value_usd": 25000000,
+        "long_amount": 2216301,
+        "short_amount": 7232145,
+        "actual_value_usd": 24999994,
+        "idle_long_after": 10129377,
+        "idle_short_after": 80422176
+      }
+    }
+  ]
+}
