@@ -19,19 +19,25 @@ contract and [INTEGRATION_GUIDE.md](./INTEGRATION_GUIDE.md) for the complete
 browser workflow. [QUICKSTART.md](./QUICKSTART.md) is the shortest end-to-end
 path from configuration to a confirmed wallet transaction.
 
-## Install
+## Install from source
 
-Review the exact version and its current security record, then keep it pinned
-and suppress dependency lifecycle scripts:
+Clone the repository and check out a reviewed commit or release tag so the SDK
+source is pinned:
 
 ```bash
-npm install --save-exact @pdex/sdk@0.1.0 --ignore-scripts
+git clone https://github.com/ultrade-org/pex-ts-pubsdk.git
+cd pex-ts-pubsdk
+git checkout <reviewed-commit-or-tag>
+npm ci --ignore-scripts
+npm run build
+npm pack --ignore-scripts
 ```
 
-Repository development uses the committed lockfile:
+The final command creates `pdex-sdk-0.1.0.tgz`. Install that exact tarball in
+your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm ci --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.1.0.tgz --ignore-scripts
 ```
 
 ## Initialize
