@@ -56,7 +56,7 @@ conformance evidence.
 Applications should resolve runtime IDs and market capabilities from the
 current backend manifests instead of hard-coding a deployment generation.
 
-## Payout preparation in 0.2.0
+## Payout preparation in 0.3.0
 
 `prepareV2ActionRecall` provides strict, current recall planning for all payout
 families. `prepareV2DecreaseOrCloseInput` and

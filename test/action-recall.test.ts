@@ -1,24 +1,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { prepareV2ActionRecall } from "../src/marketYield.js";
+import { prepareV2ActionRecall, marketYieldRegistryToJson } from "../src/marketYield.js";
 import { buildV2DecreaseOrCloseTransactions, prepareV2DecreaseOrCloseTransactions } from "../src/transactions.js";
 import { setProtocolManifest } from "../src/manifest.js";
 
 const owner = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ";
-const registry = {
-  registry_version: "resources-1", registry_hash: "hash-1", markets_app_id: 2001,
+const registry = marketYieldRegistryToJson({
+  schema_version: 1, last_indexed_round: 100,
+  registry_version: "resources-1", markets_app_id: 2001,
   market_yield_vault_app_id: 2009, market_xalgo_yield_vault_app_id: 2009,
   market_xalgo_yield_vault_app_address: owner, xalgo_consensus_app_id: 2010, xalgo_asset_id: 2011,
   markets: [{ market_id: 7, index_asset_id: 0, long_asset_id: 0, short_asset_id: 12 }],
-  strategies: [{ market_id: 7, asset_id: 0, strategy_kind: 2, xalgo_consensus_app_id: 2010,
+  strategies: [{ market_id: 7, asset_id: 0, strategy_kind: 2, underlying_asset_id: 0, receipt_asset_id: 2011, xalgo_consensus_app_id: 2010,
     xalgo_asset_id: 2011, xalgo_proposer_addresses: [owner], xalgo_provider_fee_credit_per_call_microalgos: 10000 }],
-};
+});
 
 function fixture(options: { configured?: boolean; hot?: bigint } = {}) {
-  const currentRegistry = { ...registry, strategies: options.configured === false ? [] : registry.strategies };
+  const currentRegistry = marketYieldRegistryToJson({ ...registry, registry_hash: undefined, strategies: options.configured === false ? [] : registry.strategies });
   const requests: Record<string, unknown>[] = [];
   let registryReads = 0;
   const client = {
+    network: "localnet",
     async v2MarketYieldResourceRegistry() { registryReads++; return structuredClone(currentRegistry); },
     async v2MarketYieldActionRecallPlan(payload: Record<string, unknown>) {
       requests.push(payload);
@@ -29,10 +31,13 @@ function fixture(options: { configured?: boolean; hot?: bigint } = {}) {
         const cap = configured ? "2000000" : "0";
         return { ...output, market_id: payload.market_id, yield_configured: configured,
           atomic_action_ready: true, blockers: [], requires_pre_recall: false, cap_sufficient: true,
+          liquidity_accounting: { status: "valid", pool_amount: String((options.hot ?? 131401n) + (configured ? 2000000n : 0n)),
+            economic_underlying: configured ? "2000000" : "0", signed_hot_amount: String(options.hot ?? 131401n), deficit_amount: "0" },
           hot_balance: String(options.hot ?? 131401n), available_receipt_amount: cap, max_receipt_amount: cap,
           action_recall_capacity_available: configured, will_call_action_recall: configured && amount > (options.hot ?? 131401n) };
       });
-      return { market_id: payload.market_id, registry_version: registry.registry_version, registry_hash: registry.registry_hash,
+      return { preparation_version: 1, network: "localnet", markets_app_id: 2001, observed_round: 100,
+        market_id: payload.market_id, registry_version: registry.registry_version, registry_hash: currentRegistry.registry_hash,
         atomic_action_ready: true, blockers: [], plans,
         yield_recall_mode: plans.some(p => p.max_receipt_amount !== "0") ? 1 : 0,
         caps_by_asset: Object.fromEntries(plans.map(p => [p.asset_id, p.max_receipt_amount])) };
@@ -41,7 +46,7 @@ function fixture(options: { configured?: boolean; hot?: bigint } = {}) {
   return { client, requests, currentRegistry, registryReads: () => registryReads };
 }
 
-const input = { marketId: 7, indexAssetId: 0, assetIds: [0, 12], outputs: [{ assetId: 0, requiredHotAmount: 1355832n }] };
+const input = { marketId: 7, expectedMarketsAppId: 2001, indexAssetId: 0, assetIds: [0, 12], outputs: [{ assetId: 0, requiredHotAmount: 1355832n }] };
 
 test("recall preparation covers ALGO shortfall and still authorizes recall when idle cash covers the preview", async () => {
   for (const hot of [131401n, 10000000n]) {
@@ -71,11 +76,18 @@ test("missing, stale and strategy-free cached registries cannot suppress plannin
     assert.equal(f.registryReads(), 1);
   }
   const f = fixture();
-  await assert.rejects(prepareV2ActionRecall(f.client, { ...input, marketYieldRegistry: { ...registry, strategies: [] } }), /metadata mismatch/);
+  await assert.rejects(prepareV2ActionRecall(f.client, { ...input, marketYieldRegistry: { ...registry, strategies: [] } }), /metadata mismatch|registry hash mismatch/);
 });
 
 test("incomplete, inconsistent and blocked plans fail before transaction construction", async () => {
   const mutations: Array<(p: Awaited<ReturnType<ReturnType<typeof fixture>["client"]["v2MarketYieldActionRecallPlan"]>>) => void> = [
+    p => { p.preparation_version = 0; },
+    p => { p.network = "wrong"; },
+    p => { p.markets_app_id = 2002; },
+    p => { p.observed_round = 0; },
+    p => { p.plans[0].liquidity_accounting.status = "deficit"; },
+    p => { p.plans[0].liquidity_accounting.signed_hot_amount = "0"; },
+    p => { p.plans[0].liquidity_accounting.pool_amount = "9007199254740993"; },
     p => { p.plans.pop(); },
     p => { p.plans.push(p.plans[0]); },
     p => { p.yield_recall_mode = 0; },

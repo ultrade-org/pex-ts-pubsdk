@@ -32,11 +32,14 @@ export const MARKET_YIELD_RECALL_MODE_AUTO = "auto";
 export const MARKET_YIELD_RECALL_MODE_FORCE_RECALL = "force_recall";
 export const MARKET_YIELD_RECALL_MODE_RESOURCES_ONLY = "resources_only";
 export const MARKET_YIELD_RECALL_MODE_DISABLED = "disabled";
+
 export type MarketYieldActionRecallClient = Pick<PdexApiClient,
-  "v2MarketYieldActionRecallPlan" | "v2MarketYieldResourceRegistry">;
+  "v2MarketYieldActionRecallPlan" | "v2MarketYieldResourceRegistry"> & { network?: string };
 
 export interface PrepareV2ActionRecallInput {
   marketId: Uint64Like;
+  expectedNetwork?: string;
+  expectedMarketsAppId: Uint64Like;
   indexAssetId?: Uint64Like;
   /** Include every asset the action can pay, even if its preview output is zero. */
   assetIds: Uint64Like[];
@@ -93,6 +96,16 @@ export async function prepareV2ActionRecall(
     method_name: input.methodName,
     outputs: [...amounts].map(([asset_id, amount]) => ({ asset_id, required_hot_amount: amount.toString() })),
   }), "plan");
+  if (plan.preparation_version !== 1) throw new Error("Unsupported or missing yield recall preparation version");
+  if (typeof plan.network !== "string" || !["mainnet", "testnet", "localnet"].includes(plan.network)) {
+    throw new Error("Missing yield recall network identity");
+  }
+  const expectedNetwork = input.expectedNetwork ?? client.network;
+  if (!expectedNetwork) throw new Error("Expected yield recall network is required");
+  if (plan.network !== expectedNetwork) throw new Error("Yield recall network mismatch");
+  const marketsAppId = integer(plan.markets_app_id, "Markets app ID");
+  if (marketsAppId === 0n || marketsAppId !== integer(input.expectedMarketsAppId, "expected Markets app ID")) throw new Error("Yield recall Markets app mismatch");
+  if (integer(plan.observed_round, "observed round") === 0n) throw new Error("Yield recall requires an observed round");
   if (integer(plan.market_id, "plan market ID") !== marketId) throw new Error("Yield recall plan market mismatch");
   if (!Array.isArray(plan.plans) || !Array.isArray(plan.blockers)) throw new Error("Incomplete yield recall plan");
   if (plan.atomic_action_ready !== true || plan.blockers.length) {
@@ -114,9 +127,19 @@ export async function prepareV2ActionRecall(
   if (!matches(registry)) registry = record(await client.v2MarketYieldResourceRegistry(), "resource registry");
   if (!matches(registry)) throw new Error("Yield recall registry remained stale or incomplete after refresh");
   const currentRegistry = registry!;
-  if (!(currentRegistry.markets as unknown[]).some(value => integer(record(value, "market").market_id, "registry market ID") === marketId)) {
+  // Mode 0 still requires authentic, complete resource metadata.
+  normalizeMarketYieldRegistry(currentRegistry);
+  if (integer(currentRegistry.markets_app_id, "registry Markets app ID") !== marketsAppId) {
+    throw new Error("Yield recall registry Markets app mismatch");
+  }
+  const matchingMarkets = (currentRegistry.markets as unknown[]).map(value => record(value, "market"))
+    .filter(value => integer(value.market_id, "registry market ID") === marketId);
+  if (matchingMarkets.length !== 1) {
     throw new Error("Yield recall registry does not contain the requested market");
   }
+  const backingAssets = new Set([matchingMarkets[0].long_asset_id, matchingMarkets[0].short_asset_id]
+    .map(value => integer(value, "backing asset ID").toString()));
+  if ([...amounts.keys()].some(id => !backingAssets.has(id))) throw new Error("Yield recall asset is not owned by market");
   const configured = new Set((currentRegistry.strategies as unknown[]).map(value => record(value, "strategy"))
     .filter(value => integer(value.market_id, "strategy market ID") === marketId)
     .map(value => integer(value.asset_id, "strategy asset ID").toString()));
@@ -128,6 +151,12 @@ export async function prepareV2ActionRecall(
     if (!amounts.has(id) || Object.hasOwn(capsByAsset, id)) throw new Error("Unexpected or duplicate yield recall asset plan");
     if (integer(item.market_id, "asset plan market ID") !== marketId
       || integer(item.required_hot_amount, "planned output amount") !== amounts.get(id)) throw new Error("Yield recall output mismatch");
+    const accounting = record(item.liquidity_accounting, "liquidity accounting");
+    if (accounting.status !== "valid") throw new YieldRecallUnavailableError("Market liquidity accounting is unavailable or deficient");
+    const pool = integer(accounting.pool_amount, "pool amount");
+    const valueInYield = integer(accounting.economic_underlying, "yield value");
+    if (pool < valueInYield || accounting.signed_hot_amount !== (pool - valueInYield).toString()
+      || accounting.deficit_amount !== "0") throw new Error("Inconsistent market liquidity accounting");
     if (typeof item.yield_configured !== "boolean" || item.yield_configured !== configured.has(id)) {
       throw new Error(`Yield recall strategy metadata mismatch for asset ${id}`);
     }
@@ -593,7 +622,6 @@ function validateMarketYieldRegistry(registry: MarketYieldProtocolResourceRegist
   validateUint64("last_indexed_round", registry.last_indexed_round);
   validateUint64("markets_app_id", registry.markets_app_id, true);
   validateUint64("market_yield_vault_app_id", registry.market_yield_vault_app_id, true);
-  if (!registry.strategies.length) throw new Error("registry must include at least one strategy");
   const strategyKinds = new Set(registry.strategies.map((item) => item.strategy_kind));
   if (strategyKinds.has(V2_YIELD_STRATEGY_KIND_FOLKS_LENDING)) {
     validateUint64("market_folks_yield_vault_app_id", folksVaultAppId(registry), true);
@@ -609,9 +637,10 @@ function validateMarketYieldRegistry(registry: MarketYieldProtocolResourceRegist
     if (seen.has(key)) throw new Error("duplicate market-yield strategy");
     seen.add(key);
   }
-  const strategyMarkets = new Set(registry.strategies.map((item) => item.market_id));
+  const marketIds = new Set<number>();
   for (const market of registry.markets) {
-    if (!strategyMarkets.has(market.market_id)) throw new Error("market entry has no matching strategy");
+    if (marketIds.has(market.market_id)) throw new Error("duplicate market-yield market");
+    marketIds.add(market.market_id);
   }
 }
 

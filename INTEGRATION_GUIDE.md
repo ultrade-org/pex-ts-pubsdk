@@ -134,7 +134,8 @@ known `{ assetId, requiredHotAmount }` outputs for an early liquidity check.
 Those preview quantities never set the final on-chain payout.
 
 For other payout builders, call `prepareV2ActionRecall` from
-`@pdex/sdk/marketYield` with the market ID, **every possible output asset ID**,
+`@pdex/sdk/marketYield` with the market ID, `expectedMarketsAppId` from the deployment,
+`expectedNetwork` (or the configured client network), **every possible output asset ID**,
 and any known quote outputs. It returns `yieldRecallMode`,
 `marketYieldRegistry`, and `capForAsset(assetId)`. Pass the returned mode and
 registry plus the corresponding builder cap fields:

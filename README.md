@@ -33,11 +33,11 @@ npm run build
 npm pack --ignore-scripts
 ```
 
-The final command creates `pdex-sdk-0.2.0.tgz`. Install that exact tarball in
+The final command creates `pdex-sdk-0.3.0.tgz`. Install that exact tarball in
 your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm install --save-exact /path/to/pdex-sdk-0.2.0.tgz --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.3.0.tgz --ignore-scripts
 ```
 
 ## Initialize
@@ -188,7 +188,7 @@ submits the signed group, waits for confirmation, and decodes the receipt.
 
 ## Closing positions and preparing payouts
 
-Version 0.2.0 requires explicit recall preparation for payout builders. Existing
+Version 0.3.0 requires explicit recall preparation for payout builders. Existing
 calls that omitted `yieldRecallMode` now fail before a wallet request. Use
 `prepareV2DecreaseOrCloseTransactions(client, input, suggestedParams)` for pair
 closes: it loads recall policy and resources, authorizes bounded recall for both

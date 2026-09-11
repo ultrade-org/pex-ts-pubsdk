@@ -1477,6 +1477,7 @@ export async function prepareV2DecreaseOrCloseInput(
   const { prepareV2ActionRecall } = await import("./marketYield.js");
   const recall = await prepareV2ActionRecall(client, {
     marketId: input.marketId,
+    expectedMarketsAppId: input.v2MarketsAppId,
     indexAssetId: input.indexAssetId,
     assetIds: [input.longAssetId, input.shortAssetId],
     outputs,
