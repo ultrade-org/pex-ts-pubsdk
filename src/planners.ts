@@ -216,7 +216,7 @@ export function planV2CvaWithdraw(input: {
       shortAssetId: n(market.short_asset_id ?? common.shortAssetId),
       activeMarketIds: common.activeMarketIds,
       activeMarketOracles: common.activeMarketOracles,
-      yieldRecallMode: input.yieldRecallMode ?? 0,
+      yieldRecallMode: input.yieldRecallMode,
       maxLongReceiptAmount: input.maxLongReceiptAmount ?? 0,
       maxShortReceiptAmount: input.maxShortReceiptAmount ?? 0,
       marketYieldRecallCount: input.marketYieldRecallCount ?? 0,

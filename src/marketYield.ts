@@ -1,4 +1,5 @@
 import { getApplicationAddress } from "algosdk";
+import type { PdexApiClient } from "./api.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import {
   v2MarketCoreBoxKey,
@@ -31,6 +32,134 @@ export const MARKET_YIELD_RECALL_MODE_AUTO = "auto";
 export const MARKET_YIELD_RECALL_MODE_FORCE_RECALL = "force_recall";
 export const MARKET_YIELD_RECALL_MODE_RESOURCES_ONLY = "resources_only";
 export const MARKET_YIELD_RECALL_MODE_DISABLED = "disabled";
+export type MarketYieldActionRecallClient = Pick<PdexApiClient,
+  "v2MarketYieldActionRecallPlan" | "v2MarketYieldResourceRegistry">;
+
+export interface PrepareV2ActionRecallInput {
+  marketId: Uint64Like;
+  indexAssetId?: Uint64Like;
+  /** Include every asset the action can pay, even if its preview output is zero. */
+  assetIds: Uint64Like[];
+  outputs?: Array<{ assetId: Uint64Like; requiredHotAmount: Uint64Like }>;
+  actionFamily?: string;
+  methodName?: string;
+  marketYieldRegistry?: Record<string, unknown>;
+}
+
+export interface PreparedV2ActionRecall {
+  yieldRecallMode: number;
+  marketYieldRegistry: Record<string, unknown>;
+  capsByAsset: Record<string, bigint>;
+  capForAsset: (assetId: Uint64Like) => bigint;
+}
+
+export class YieldRecallUnavailableError extends Error {
+  constructor(message: string) { super(message); this.name = "YieldRecallUnavailableError"; }
+}
+
+/** Plan bounded, atomic recall even when the preview is fully funded by idle cash.
+ * Missing or inconsistent metadata is an error, never evidence that yield is off.
+ */
+export async function prepareV2ActionRecall(
+  client: MarketYieldActionRecallClient,
+  input: PrepareV2ActionRecallInput,
+): Promise<PreparedV2ActionRecall> {
+  const integer = (value: unknown, label: string): bigint => {
+    if ((typeof value !== "string" && typeof value !== "number" && typeof value !== "bigint")
+      || (typeof value === "number" && !Number.isSafeInteger(value))
+      || (typeof value === "string" && !/^\d+$/.test(value))) {
+      throw new Error(`Invalid yield recall ${label}`);
+    }
+    const result = BigInt(value);
+    if (result < 0n || result > 0xffffffffffffffffn) throw new Error(`Invalid yield recall ${label}`);
+    return result;
+  };
+  const record = (value: unknown, label: string): Record<string, unknown> => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`Missing yield recall ${label}`);
+    return value as Record<string, unknown>;
+  };
+  const marketId = integer(input.marketId, "market ID");
+  if (marketId === 0n || !input.assetIds.length) throw new Error("Yield recall requires a market and output assets");
+  const amounts = new Map(input.assetIds.map(id => [integer(id, "asset ID").toString(), 0n]));
+  for (const output of input.outputs ?? []) {
+    const id = integer(output.assetId, "asset ID").toString();
+    if (!amounts.has(id)) throw new Error(`Yield recall output asset ${id} is not declared`);
+    amounts.set(id, integer(amounts.get(id)! + integer(output.requiredHotAmount, "output amount"), "output amount"));
+  }
+  const plan = record(await client.v2MarketYieldActionRecallPlan({
+    market_id: marketId.toString(),
+    ...(input.indexAssetId !== undefined ? { index_asset_id: integer(input.indexAssetId, "index asset ID").toString() } : {}),
+    action_family: input.actionFamily,
+    method_name: input.methodName,
+    outputs: [...amounts].map(([asset_id, amount]) => ({ asset_id, required_hot_amount: amount.toString() })),
+  }), "plan");
+  if (integer(plan.market_id, "plan market ID") !== marketId) throw new Error("Yield recall plan market mismatch");
+  if (!Array.isArray(plan.plans) || !Array.isArray(plan.blockers)) throw new Error("Incomplete yield recall plan");
+  if (plan.atomic_action_ready !== true || plan.blockers.length) {
+    const detail = plan.blockers.map(value => {
+      const blocker = record(value, "blocker");
+      return String(blocker.message ?? blocker.code ?? "unavailable");
+    }).join(" ");
+    const providerLimited = plan.blockers.some(value => record(value, "blocker").code === "provider_liquidity_insufficient");
+    throw new YieldRecallUnavailableError(`${providerLimited ? "This payout is temporarily unavailable from the yield provider." : "Atomic yield recall is unavailable."} ${detail}`.trim());
+  }
+  const version = plan.registry_version;
+  const hash = plan.registry_hash;
+  if (typeof version !== "string" || !version || typeof hash !== "string" || !hash) {
+    throw new Error("Yield recall plan is missing registry identity");
+  }
+  let registry = input.marketYieldRegistry;
+  const matches = (value: Record<string, unknown> | undefined) => value?.registry_version === version && value?.registry_hash === hash
+    && Array.isArray(value?.strategies) && Array.isArray(value?.markets);
+  if (!matches(registry)) registry = record(await client.v2MarketYieldResourceRegistry(), "resource registry");
+  if (!matches(registry)) throw new Error("Yield recall registry remained stale or incomplete after refresh");
+  const currentRegistry = registry!;
+  if (!(currentRegistry.markets as unknown[]).some(value => integer(record(value, "market").market_id, "registry market ID") === marketId)) {
+    throw new Error("Yield recall registry does not contain the requested market");
+  }
+  const configured = new Set((currentRegistry.strategies as unknown[]).map(value => record(value, "strategy"))
+    .filter(value => integer(value.market_id, "strategy market ID") === marketId)
+    .map(value => integer(value.asset_id, "strategy asset ID").toString()));
+  const rawCaps = record(plan.caps_by_asset, "receipt caps");
+  const capsByAsset: Record<string, bigint> = {};
+  for (const value of plan.plans) {
+    const item = record(value, "asset plan");
+    const id = integer(item.asset_id, "plan asset ID").toString();
+    if (!amounts.has(id) || Object.hasOwn(capsByAsset, id)) throw new Error("Unexpected or duplicate yield recall asset plan");
+    if (integer(item.market_id, "asset plan market ID") !== marketId
+      || integer(item.required_hot_amount, "planned output amount") !== amounts.get(id)) throw new Error("Yield recall output mismatch");
+    if (typeof item.yield_configured !== "boolean" || item.yield_configured !== configured.has(id)) {
+      throw new Error(`Yield recall strategy metadata mismatch for asset ${id}`);
+    }
+    if (item.cap_sufficient === false) throw new YieldRecallUnavailableError(`Atomic yield recall exceeds the configured per-action cap for asset ${id}.`);
+    if (item.atomic_action_ready !== true || item.requires_pre_recall === true
+      || !Array.isArray(item.blockers) || item.blockers.length) {
+      throw new YieldRecallUnavailableError(`Atomic yield recall unavailable for asset ${id}`);
+    }
+    const cap = integer(rawCaps[id], "receipt cap");
+    if (item.yield_configured) {
+      if (cap !== integer(item.max_receipt_amount, "asset receipt cap")
+        || cap > integer(item.available_receipt_amount, "available receipts")
+        || (cap > 0n && item.action_recall_capacity_available !== true)) throw new Error("Inconsistent yield recall receipt cap");
+    } else if (cap !== 0n) throw new Error("Unconfigured yield strategy has a receipt cap");
+    capsByAsset[id] = cap;
+  }
+  if (Object.keys(capsByAsset).length !== amounts.size || Object.keys(rawCaps).length !== amounts.size) {
+    throw new Error("Yield recall plan omitted an output asset");
+  }
+  const yieldRecallMode = Object.values(capsByAsset).some(cap => cap > 0n) ? 1 : 0;
+  if (integer(plan.yield_recall_mode, "mode") !== BigInt(yieldRecallMode)) throw new Error("Yield recall mode does not match receipt caps");
+  return {
+    yieldRecallMode,
+    marketYieldRegistry: currentRegistry,
+    capsByAsset,
+    capForAsset: assetId => {
+      const id = integer(assetId, "asset ID").toString();
+      if (!Object.hasOwn(capsByAsset, id)) throw new Error(`Yield recall was not prepared for asset ${id}`);
+      return capsByAsset[id];
+    },
+  };
+}
 export const V2_YIELD_EXCHANGE_RATE_SCALE = 1_000_000n;
 export const V2_YIELD_MAX_POOL_CALL_FEE_MICRO_ALGO = 10_000;
 export const PDEX_FOLKS_EXTERNAL_PROTOCOL_FEE_MICRO_ALGO = 0;

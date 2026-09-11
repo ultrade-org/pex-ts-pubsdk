@@ -157,3 +157,10 @@ when one is present.
 After confirmation, reload the scoped account and market data. If a refreshed
 quote changes materially before signing, present a new review rather than
 submitting the earlier group.
+
+## Close the position
+
+Use the asynchronous `prepareV2DecreaseOrCloseTransactions` builder described
+in [Recall preparation](./INTEGRATION_GUIDE.md#recall-preparation). It prepares
+bounded recall automatically. The opening example above does not replace this
+payout preparation step.

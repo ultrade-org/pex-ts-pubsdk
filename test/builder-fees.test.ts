@@ -98,6 +98,8 @@ const params: SuggestedParams = {
 };
 
 const common = {
+  // These descriptor fixtures explicitly select the no-recall path.
+  yieldRecallMode: 0,
   sender: OWNER,
   v2MarketsAppId: 2001,
   v2TradingAppId: 2002,

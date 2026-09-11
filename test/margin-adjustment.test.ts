@@ -43,6 +43,8 @@ setProtocolManifest(manifest, 2);
 
 const sender = Uint8Array.from({ length: 32 }, (_, index) => index);
 const common = {
+  // These descriptor fixtures explicitly select the no-recall path.
+  yieldRecallMode: 0,
   v2MarketsAppId: 2001,
   v2AdminControlAppId: 2003,
   v2TradingAppId: 2002,

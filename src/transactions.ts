@@ -1466,6 +1466,42 @@ export function buildV2DecreaseOrCloseCall(input: V2DecreaseOrCloseInput): AppCa
   };
 }
 
+/** Prepare every possible pair-close payout asset before building or signing.
+ * The contract decides whether a provider withdrawal is needed at execution.
+ */
+export async function prepareV2DecreaseOrCloseInput(
+  client: import("./marketYield.js").MarketYieldActionRecallClient,
+  input: V2DecreaseOrCloseInput,
+  outputs?: import("./marketYield.js").PrepareV2ActionRecallInput["outputs"],
+): Promise<V2DecreaseOrCloseInput> {
+  const { prepareV2ActionRecall } = await import("./marketYield.js");
+  const recall = await prepareV2ActionRecall(client, {
+    marketId: input.marketId,
+    indexAssetId: input.indexAssetId,
+    assetIds: [input.longAssetId, input.shortAssetId],
+    outputs,
+    actionFamily: "trading",
+    methodName: "decrease_or_close",
+    marketYieldRegistry: input.marketYieldRegistry,
+  });
+  return {
+    ...input,
+    yieldRecallMode: recall.yieldRecallMode,
+    maxLongReceiptAmount: recall.capForAsset(input.longAssetId),
+    maxShortReceiptAmount: recall.capForAsset(input.shortAssetId),
+    marketYieldRegistry: recall.marketYieldRegistry,
+  };
+}
+
+export async function prepareV2DecreaseOrCloseTransactions(
+  client: import("./marketYield.js").MarketYieldActionRecallClient,
+  input: V2DecreaseOrCloseInput,
+  suggestedParams: SuggestedParams,
+  outputs?: import("./marketYield.js").PrepareV2ActionRecallInput["outputs"],
+): Promise<Transaction[]> {
+  return buildV2DecreaseOrCloseTransactions(await prepareV2DecreaseOrCloseInput(client, input, outputs), suggestedParams);
+}
+
 export function buildV2WithdrawPositionMarginCall(input: V2WithdrawPositionMarginInput): AppCallDescriptor {
   validateRawPrice12(input.acceptablePrice as RawPrice12);
   const builderFee = normalizeBuilderFee(input.builderFee, 0);
@@ -4981,7 +5017,12 @@ function v2PoolAssets(input: { longAssetId?: BigNumberish; shortAssetId?: BigNum
 }
 
 function v2YieldRecallMode(input: Record<string, unknown>): BigNumberish {
-  return (input.yieldRecallMode as BigNumberish | undefined) ?? (input.yield_recall_mode as BigNumberish | undefined) ?? 0;
+  const mode = input.yieldRecallMode ?? input.yield_recall_mode;
+  if (mode === undefined || mode === null) {
+    throw new Error("Yield recall preparation is required. Use prepareV2ActionRecall or prepareV2DecreaseOrCloseTransactions before building a payout transaction.");
+  }
+  if (![0, 1, 0n, 1n, "0", "1"].includes(mode as number)) throw new Error("Invalid yield recall mode");
+  return mode as BigNumberish;
 }
 
 function v2ActionRecallCap(input: Record<string, unknown>, ...names: string[]): BigNumberish {

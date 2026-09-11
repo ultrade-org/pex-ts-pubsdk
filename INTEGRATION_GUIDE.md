@@ -93,6 +93,72 @@ Keep integer domains intact:
 - market position quantity uses its manifest-defined scale;
 - values above JavaScript's safe integer range remain strings or `bigint`.
 
+## Recall preparation
+
+Every payout transaction needs a current recall plan. This includes closes,
+margin withdrawals, LP withdrawals, swaps, order execution, liquidations, and
+market-routed CVA withdrawals. Recall authorization is included even when idle
+cash currently covers the quote; the contract checks the actual shortfall at
+execution. This adds resource carriers and a worst-case fee budget even when
+no provider withdrawal occurs.
+
+For pair closes, use the prepared builder instead of calling the synchronous
+builder with omitted recall fields:
+
+```ts
+import { prepareV2DecreaseOrCloseTransactions } from "@pdex/sdk/transactions";
+
+const transactions = await prepareV2DecreaseOrCloseTransactions(
+  pdex.client,
+  {
+    ...pdex.appRefs,
+    ...pdexMarketAssetRefs(market),
+    sender: address,
+    marketId: market.marketId,
+    collateralAssetId,
+    side,
+    sizeUsdDelta,
+    acceptablePrice,
+    minPrimaryOutput: minCollateralOutput,
+    minSecondaryOutputAmount: minPnlOutput,
+    oracleMessage: oracle.message,
+    oracleSignature: oracle.signature,
+  },
+  suggestedParams,
+);
+```
+
+The helper plans both possible payout assets, including native ALGO `0`, even
+when a preview reports no PnL output. An optional fourth argument supplies
+known `{ assetId, requiredHotAmount }` outputs for an early liquidity check.
+Those preview quantities never set the final on-chain payout.
+
+For other payout builders, call `prepareV2ActionRecall` from
+`@pdex/sdk/marketYield` with the market ID, **every possible output asset ID**,
+and any known quote outputs. It returns `yieldRecallMode`,
+`marketYieldRegistry`, and `capForAsset(assetId)`. Pass the returned mode and
+registry plus the corresponding builder cap fields:
+
+| Builder family | Receipt cap fields |
+| --- | --- |
+| Pair close, margin withdrawal, LP withdrawal, liquidation, market-routed CVA withdrawal | `maxLongReceiptAmount`, `maxShortReceiptAmount` |
+| Single-token payouts | `maxBackingReceiptAmount` |
+| Direct swap | `maxOutputReceiptAmount` for the output token |
+| Two-hop swap | Prepare each market separately; `maxOutputReceiptAmount0`, `maxOutputReceiptAmount1` and matching registry resources |
+| Pair order execution | `maxLongReceiptAmount`, `maxShortReceiptAmount` |
+
+The planner authorizes available receipts within configured limits. Do not
+replace those caps with an unlimited integer or turn off recall because the
+preview says none is currently necessary. Missing or inconsistent metadata,
+provider blockers, or unavailable planning must stop preparation.
+
+Low-level synchronous builders remain available for callers that supply a
+complete plan themselves. `yieldRecallMode: 0` is an explicit advanced choice;
+it must not be used as a migration shortcut to silence the preparation error.
+Use the prepared result, including its explicit zero mode for a market with no
+configured yield. The SDK cannot secure transactions constructed by other
+clients or replace contract enforcement of market-owned liquidity.
+
 ## 6. Fetch signed oracle data
 
 Use `v2OracleArgs()` with the destination application ID and action target. The

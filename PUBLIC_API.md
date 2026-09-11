@@ -55,3 +55,11 @@ conformance evidence.
 
 Applications should resolve runtime IDs and market capabilities from the
 current backend manifests instead of hard-coding a deployment generation.
+
+## Payout preparation in 0.2.0
+
+`prepareV2ActionRecall` provides strict, current recall planning for all payout
+families. `prepareV2DecreaseOrCloseInput` and
+`prepareV2DecreaseOrCloseTransactions` prepare pair-close recall automatically.
+Payout builders reject omitted recall mode; integrations must migrate before
+using this version. See INTEGRATION_GUIDE.md for mode and cap mapping.

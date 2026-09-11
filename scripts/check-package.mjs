@@ -50,6 +50,7 @@ const expectedScriptFiles = [
 ];
 
 const expectedTestFiles = [
+  "action-recall.test.ts",
   "api.test.ts",
   "builder-fees.test.ts",
   "fixtures",
@@ -208,6 +209,8 @@ const expectedClientMethods = [
 ];
 
 const expectedTransactionFunctions = [
+  "prepareV2DecreaseOrCloseInput",
+  "prepareV2DecreaseOrCloseTransactions",
   "appendV2TransactionGroupTransactions",
   "assertV2OrderPriceCoherent",
   "buildAppCall",
