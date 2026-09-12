@@ -1,0 +1,337 @@
+{
+  "schema_version": 1,
+  "policy": "Contract emergency admissibility and liquidation health are separate. USD6 values derived by hand: survivor collateral + PnL - remaining carry, then close fee and capped negative impact.",
+  "market": {
+    "opposing_trader_share_bps": 10000,
+    "market_id": 7,
+    "index_asset_id": 11,
+    "long_asset_id": 11,
+    "short_asset_id": 12,
+    "min_position_size_usd": 5000000,
+    "min_collateral_usd": 5000000,
+    "initial_margin_bps": 1000,
+    "maintenance_margin_bps": 250,
+    "dynamic_oi_margin_version": 1,
+    "dynamic_oi_margin_flags": 0,
+    "dynamic_oi_margin_long_factor_scaled": 0,
+    "dynamic_oi_margin_short_factor_scaled": 0,
+    "max_open_interest_long": 1000000000,
+    "max_open_interest_short": 1000000000,
+    "max_pool_amount_long": 2000000000,
+    "max_pool_amount_short": 2000000000,
+    "max_pool_usd_for_deposit_long": 2000000000,
+    "max_pool_usd_for_deposit_short": 2000000000,
+    "reserve_factor_long_bps": 10000,
+    "reserve_factor_short_bps": 10000,
+    "max_pnl_factor_for_deposits_bps": 10000,
+    "max_pnl_factor_for_withdrawals_bps": 5000,
+    "max_pnl_factor_for_traders_bps": 10000,
+    "max_pnl_factor_for_adl_bps": 6000,
+    "min_pnl_factor_after_adl_bps": 5000,
+    "position_impact_factor_bps": 100,
+    "max_position_impact_bps": 100,
+    "swap_impact_factor_bps": 0,
+    "max_swap_impact_bps": 0,
+    "open_fee_bps": 0,
+    "close_fee_bps": 6,
+    "liquidation_fee_bps": 0,
+    "max_liquidation_impact_bps": 50,
+    "funding_factor_milli_bps": 0,
+    "funding_interval_seconds": 3600,
+    "base_borrowing_factor_long_milli_bps": 0,
+    "base_borrowing_factor_short_milli_bps": 0,
+    "full_usage_borrowing_factor_long_milli_bps": 0,
+    "full_usage_borrowing_factor_short_milli_bps": 0,
+    "optimal_usage_factor_long_bps": 7000,
+    "optimal_usage_factor_short_bps": 7000,
+    "long_oi_usd_with_long_collateral": 0,
+    "long_oi_usd_with_short_collateral": 100000000,
+    "short_oi_usd_with_long_collateral": 0,
+    "short_oi_usd_with_short_collateral": 300000000,
+    "long_oi_tokens_with_long_collateral": 0,
+    "long_oi_tokens_with_short_collateral": 100000000000,
+    "short_oi_tokens_with_long_collateral": 0,
+    "short_oi_tokens_with_short_collateral": 0,
+    "position_conversion_scale": 1000000000000000,
+    "long_borrowing_factor_milli_bps": 111,
+    "long_funding_fee_per_size_with_short_collateral_milli_bps": 222
+  },
+  "pool": {
+    "long_pool_amount": 1000000,
+    "short_pool_amount": 1000000000,
+    "market_share_supply": 1000000000,
+    "position_impact_pool_qty": 100000000000,
+    "lent_position_impact_pool_qty": 0
+  },
+  "prices": {
+    "index_price": 1010000000000,
+    "index_price_min": 1010000000000,
+    "index_price_max": 1010000000000,
+    "long_price": 1000000000000,
+    "long_price_min": 1000000000000,
+    "long_price_max": 1000000000000,
+    "short_price": 1000000000000,
+    "short_price_min": 1000000000000,
+    "short_price_max": 1000000000000
+  },
+  "position": {
+    "owner": "fixture",
+    "market_id": 7,
+    "collateral_asset_id": 12,
+    "side": 1,
+    "size_usd": 100000000,
+    "size_tokens": 100000000000,
+    "collateral_amount": 1500000,
+    "entry_price": 1000000000000,
+    "borrowing_factor_snapshot_milli_bps": 111,
+    "funding_fee_per_size_snapshot_milli_bps": 222,
+    "claimable_long_token_funding_per_size_snapshot": 0,
+    "claimable_short_token_funding_per_size_snapshot": 0
+  },
+  "size_usd_delta": 50000000,
+  "cases": [
+    {
+      "id": "fee_only_immediately_liquidatable",
+      "market": {
+        "position_impact_factor_bps": 0
+      },
+      "expected": {
+        "remaining_collateral": 750000,
+        "adl_survivor_equity_usd": 1250000,
+        "adl_survivor_maintenance_usd": 1250000,
+        "post_action_equity_usd": 1220000,
+        "post_action_liquidatable": true,
+        "adl_survivor_contract_admissible": true,
+        "ok": true
+      }
+    },
+    {
+      "id": "capped_negative_impact",
+      "position": {
+        "collateral_amount": 2000000
+      },
+      "expected": {
+        "remaining_collateral": 1000000,
+        "adl_survivor_equity_usd": 1500000,
+        "adl_survivor_maintenance_usd": 1250000,
+        "post_action_equity_usd": 1220000,
+        "post_action_liquidatable": true,
+        "adl_survivor_contract_admissible": true,
+        "ok": true
+      }
+    },
+    {
+      "id": "healthy_below_entry_floor",
+      "position": {
+        "collateral_amount": 3000000
+      },
+      "expected": {
+        "remaining_collateral": 1500000,
+        "adl_survivor_equity_usd": 2000000,
+        "adl_survivor_maintenance_usd": 1250000,
+        "post_action_equity_usd": 1720000,
+        "post_action_liquidatable": false,
+        "adl_survivor_contract_admissible": true,
+        "ok": true
+      }
+    },
+    {
+      "id": "normal_carry_settled_once",
+      "position": {
+        "collateral_amount": 5000000
+      },
+      "market": {
+        "long_borrowing_factor_milli_bps": 100111,
+        "long_funding_fee_per_size_with_short_collateral_milli_bps": 100222,
+        "short_token_claimable_funding_per_size_for_longs": 10000000000
+      },
+      "expected": {
+        "remaining_collateral": 2000000,
+        "adl_survivor_equity_usd": 2500000,
+        "adl_survivor_maintenance_usd": 1250000,
+        "post_action_equity_usd": 2220000,
+        "post_action_liquidatable": false,
+        "adl_survivor_contract_admissible": true,
+        "ok": true,
+        "cost_deficit": false,
+        "remaining_snapshot_mode": "SETTLED_CURRENT"
+      }
+    },
+    {
+      "id": "deficit_snapshots_preserved",
+      "prices": {
+        "index_price": 1040000000000,
+        "index_price_min": 1040000000000,
+        "index_price_max": 1040000000000
+      },
+      "market": {
+        "long_borrowing_factor_milli_bps": 200111,
+        "long_funding_fee_per_size_with_short_collateral_milli_bps": 100222,
+        "short_token_claimable_funding_per_size_for_longs": 5000000000
+      },
+      "expected": {
+        "remaining_collateral": 750000,
+        "adl_survivor_equity_usd": 1500000,
+        "adl_survivor_maintenance_usd": 1250000,
+        "post_action_equity_usd": 1220000,
+        "post_action_liquidatable": true,
+        "adl_survivor_contract_admissible": true,
+        "ok": true,
+        "cost_deficit": true,
+        "remaining_snapshot_mode": "UNSETTLED_SLICE"
+      }
+    },
+    {
+      "id": "deficit_guard_rejects",
+      "market": {
+        "long_borrowing_factor_milli_bps": 200111,
+        "long_funding_fee_per_size_with_short_collateral_milli_bps": 100222,
+        "short_token_claimable_funding_per_size_for_longs": 5000000000
+      },
+      "expected": {
+        "remaining_collateral": 750000,
+        "adl_survivor_equity_usd": 0,
+        "adl_survivor_maintenance_usd": 1250000,
+        "post_action_equity_usd": 0,
+        "post_action_liquidatable": true,
+        "adl_survivor_contract_admissible": false,
+        "ok": false,
+        "cost_deficit": true,
+        "remaining_snapshot_mode": "UNSETTLED_SLICE"
+      }
+    },
+    {
+      "id": "same_token_credit_settled_once",
+      "position": {
+        "collateral_amount": 1000000
+      },
+      "market": {
+        "long_borrowing_factor_milli_bps": 100111,
+        "short_token_claimable_funding_per_size_for_longs": 20000000000
+      },
+      "expected": {
+        "remaining_collateral": 1000000,
+        "adl_survivor_equity_usd": 1500000,
+        "adl_survivor_maintenance_usd": 1250000,
+        "post_action_equity_usd": 1220000,
+        "post_action_liquidatable": true,
+        "adl_survivor_contract_admissible": true,
+        "ok": true
+      }
+    },
+    {
+      "id": "other_token_credit_not_margin",
+      "market": {
+        "position_impact_factor_bps": 0,
+        "long_token_claimable_funding_per_size_for_longs": 100000000000
+      },
+      "expected": {
+        "remaining_collateral": 750000,
+        "adl_survivor_equity_usd": 1250000,
+        "adl_survivor_maintenance_usd": 1250000,
+        "post_action_equity_usd": 1220000,
+        "post_action_liquidatable": true,
+        "adl_survivor_contract_admissible": true,
+        "ok": true
+      }
+    },
+    {
+      "id": "single_token_combines_same_asset_claims",
+      "family": "single_token",
+      "market": {
+        "long_asset_id": 12,
+        "position_impact_factor_bps": 0,
+        "long_token_claimable_funding_per_size_for_longs": 5000000000,
+        "short_token_claimable_funding_per_size_for_longs": 5000000000
+      },
+      "expected": {
+        "remaining_collateral": 1250000,
+        "adl_survivor_equity_usd": 1750000,
+        "adl_survivor_maintenance_usd": 1250000,
+        "post_action_equity_usd": 1720000,
+        "post_action_liquidatable": false,
+        "adl_survivor_contract_admissible": true,
+        "ok": true
+      }
+    },
+    {
+      "id": "full_close_no_survivor",
+      "size_usd_delta": 100000000,
+      "expected": {
+        "ok": true,
+        "remaining_size": 0,
+        "remaining_collateral": 0,
+        "adl_survivor_contract_admissible": true,
+        "post_action_health": null,
+        "remaining_snapshot_mode": "FULL_DELETE"
+      }
+    },
+    {
+      "id": "dust_survivor_rejected",
+      "size_usd_delta": 96000000,
+      "expected": {
+        "ok": false,
+        "adl_survivor_contract_admissible": false,
+        "remaining_size": 4000000
+      }
+    },
+    {
+      "id": "zero_slice_tokens_rejected",
+      "position": {
+        "size_tokens": 1000
+      },
+      "size_usd_delta": 1,
+      "expected": {
+        "ok": false,
+        "size_token_delta": 0
+      }
+    },
+    {
+      "id": "short_future_fee_and_impact",
+      "position": {
+        "side": 2,
+        "borrowing_factor_snapshot_milli_bps": 0,
+        "funding_fee_per_size_snapshot_milli_bps": 0
+      },
+      "market": {
+        "long_oi_usd_with_short_collateral": 300000000,
+        "short_oi_usd_with_short_collateral": 100000000,
+        "short_oi_tokens_with_short_collateral": 100000000000
+      },
+      "prices": {
+        "index_price": 990000000000,
+        "index_price_min": 990000000000,
+        "index_price_max": 990000000000
+      },
+      "pool": {
+        "short_pool_amount": 1000000
+      },
+      "expected": {
+        "ok": true,
+        "adl_survivor_contract_admissible": true,
+        "adl_survivor_equity_usd": 1250000,
+        "adl_survivor_maintenance_usd": 1250000,
+        "remaining_collateral": 750000,
+        "post_action_equity_usd": 970000,
+        "post_action_liquidatable": true
+      }
+    },
+    {
+      "id": "collateral_price_conversion",
+      "prices": {
+        "short_price": 2000000000000,
+        "short_price_min": 2000000000000,
+        "short_price_max": 2000000000000
+      },
+      "expected": {
+        "ok": true,
+        "adl_survivor_contract_admissible": true,
+        "adl_survivor_equity_usd": 2000000,
+        "adl_survivor_maintenance_usd": 1250000,
+        "remaining_collateral": 750000,
+        "post_action_equity_usd": 1720000,
+        "post_action_liquidatable": false
+      }
+    }
+  ]
+}

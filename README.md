@@ -33,12 +33,29 @@ npm run build
 npm pack --ignore-scripts
 ```
 
-The final command creates `pdex-sdk-0.3.0.tgz`. Install that exact tarball in
+The final command creates `pdex-sdk-0.3.1.tgz`. Install that exact tarball in
 your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm install --save-exact /path/to/pdex-sdk-0.3.0.tgz --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.3.1.tgz --ignore-scripts
 ```
+
+## Updating to 0.3.1
+
+Builders using 0.2.x or 0.3.0 should upgrade and rebuild their application.
+Version 0.3.1 corrects position health, admission, funding and borrowing
+breakdowns, unsigned previews for rekeyed accounts, and composition of groups
+containing repeated Math helper calls. It also exports `quoteV2LiquidationPrice`.
+
+The minimum collateral setting remains an admission requirement. Falling below
+it alone does not make an existing position liquidatable; maintenance equity
+includes accrued costs, close fees, and capped negative liquidation impact.
+Use `post_action_liquidatable` to assess an ADL survivor separately from
+`adl_survivor_contract_admissible`, which describes emergency admissibility.
+
+From 0.3.0, no new required inputs are introduced. From 0.2.x, also apply the
+[recall preparation migration](./INTEGRATION_GUIDE.md#recall-preparation).
+Rebuild and regroup unsigned transactions with the updated SDK before signing.
 
 ## Initialize
 

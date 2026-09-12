@@ -53,12 +53,14 @@ const expectedTestFiles = [
   "action-recall.test.ts",
   "api.test.ts",
   "builder-fees.test.ts",
+  "composed-carrier-identity.test.ts",
   "fixtures",
   "funding-recipient-split.test.ts",
   "integration.test.ts",
   "lp-swap-recall.test.ts",
   "margin-adjustment.test.ts",
   "position-token-precision.test.ts",
+  "position-resolution-simulation.test.ts",
   "public-capabilities.test.ts",
   "read-models.test.ts",
   "receipts.test.ts",
@@ -71,6 +73,7 @@ const expectedTestFiles = [
 
 const expectedFixtureFiles = [
   "v2-admission-liquidation-consistency-v1.json",
+  "v2-adl-survivor-policy-v1.json",
   "v2-cva-active-mark-withdraw-v1.json",
   "v2-cva-allocation-sizing-v2.json",
   "v2-cva-withdraw-route-v1.json",

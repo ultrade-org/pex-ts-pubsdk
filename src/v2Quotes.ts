@@ -28,7 +28,7 @@ import {
   quoteV2PositionCostSlice,
 } from "./v2PositionResolution.js";
 import { readV2MarketPositionScales } from "./boxes.js";
-import { ORACLE_PRICE_SCALE, validateRawPrice12, type RawPrice12 } from "./oracle.js";
+import { MAX_ORACLE_PRICE, ORACLE_PRICE_SCALE, validateRawPrice12, type RawPrice12 } from "./oracle.js";
 import {
   MAX_POSITION_BUILDER_FEE_BPS,
   MAX_SWAP_BUILDER_FEE_BPS,
@@ -1565,10 +1565,9 @@ export function calculateV2PositionHealthComponents(input: {
   const remainingUsd = max(0n, creditsUsd - costsUsd);
   const maintenanceRequirementUsd = feeFromBps(sizeUsd, n(input.maintenanceMarginBps));
   const minCollateralUsd = n(input.minCollateralUsd);
-  const requiredRemainingUsd = max(minCollateralUsd, maintenanceRequirementUsd);
+  const requiredRemainingUsd = maintenanceRequirementUsd;
   const liquidatable = currentPrice > 0n && (
     creditsUsd <= costsUsd
-    || remainingUsd < minCollateralUsd
     || remainingUsd < maintenanceRequirementUsd
   );
   const requiredCollateralValueUsd = max(
@@ -1640,6 +1639,28 @@ export function quoteV2PositionHealth(input: {
   const accruedCostUsd = costDeficit
     ? (fullNetCost * collateralPrice) / ORACLE_PRICE_SCALE
     : 0n;
+  const factorDeltas = (costQuote?.factor_deltas ?? {}) as V2StateRecord;
+  const fullFloors = (costQuote?.full_floors ?? {}) as V2StateRecord;
+  const fundingFeeUsd = (sizeUsd * get(factorDeltas, "funding_pay"))
+    / V2_BORROWING_FACTOR_DENOMINATOR;
+  const totalFeeUsd = get(fullFloors, "pay_usd");
+  const borrowingFeeUsd = max(0n, totalFeeUsd - fundingFeeUsd);
+  const fundingFeeCollateralAmount = collateralPrice > 0n
+    ? (fundingFeeUsd * ORACLE_PRICE_SCALE) / collateralPrice
+    : 0n;
+  const totalFeeCollateralAmount = get(fullFloors, "pay_collateral");
+  const borrowingFeeCollateralAmount = max(
+    0n,
+    totalFeeCollateralAmount - fundingFeeCollateralAmount,
+  );
+  const fundingClaimLongAmount = get(fullFloors, "long_claim");
+  const fundingClaimShortAmount = get(fullFloors, "short_claim");
+  const fundingClaimLongUsd = (fundingClaimLongAmount * prices.long_price)
+    / ORACLE_PRICE_SCALE;
+  const fundingClaimShortUsd = (fundingClaimShortAmount * prices.short_price)
+    / ORACLE_PRICE_SCALE;
+  const fundingClaimUsd = fundingClaimLongUsd + fundingClaimShortUsd;
+  const netFundingUsd = fundingClaimUsd - fundingFeeUsd;
   const [, rawNegativeImpact] = sizeUsd > 0n && indexPrice > 0n
     ? positionImpact(input.market, input.pool, side, sizeUsd, false, indexPrice)
     : [0n, 0n];
@@ -1677,7 +1698,7 @@ export function quoteV2PositionHealth(input: {
     dynamicMargin.effective_initial_margin_bps,
   );
   const initialMarginRequiredAmount = collateralPrice > 0n
-    ? ceilDiv(initialMarginRequiredUsd * ORACLE_PRICE_SCALE, collateralPrice)
+    ? ceilDiv(max(initialMarginRequiredUsd, risk.min_collateral_usd) * ORACLE_PRICE_SCALE, collateralPrice)
     : 0n;
   const minimumCollateralAmountForInitialMargin = max(
     0n,
@@ -1688,7 +1709,7 @@ export function quoteV2PositionHealth(input: {
     enforceInitialMargin ? minimumCollateralAmountForInitialMargin : 0n,
   );
   const initialMarginBreach = enforceInitialMargin
-    && (collateralAfterCost * collateralPrice) / ORACLE_PRICE_SCALE < initialMarginRequiredUsd;
+    && (collateralAfterCost * collateralPrice) / ORACLE_PRICE_SCALE < max(initialMarginRequiredUsd, risk.min_collateral_usd);
   return {
     ...health,
     ok: reasons.length === 0,
@@ -1700,6 +1721,19 @@ export function quoteV2PositionHealth(input: {
     same_token_credit_amount: sameTokenCredit,
     cost_deficit: costDeficit,
     position_cost_resolution: costQuote,
+    pending_funding_fee_usd: fundingFeeUsd,
+    pending_borrowing_fee_usd: borrowingFeeUsd,
+    pending_total_fee_usd: totalFeeUsd,
+    pending_funding_fee_collateral_amount: fundingFeeCollateralAmount,
+    pending_borrowing_fee_collateral_amount: borrowingFeeCollateralAmount,
+    pending_total_fee_collateral_amount: totalFeeCollateralAmount,
+    pending_funding_claim_long_amount: fundingClaimLongAmount,
+    pending_funding_claim_short_amount: fundingClaimShortAmount,
+    pending_funding_claim_long_usd: fundingClaimLongUsd,
+    pending_funding_claim_short_usd: fundingClaimShortUsd,
+    pending_funding_claim_usd: fundingClaimUsd,
+    pending_net_funding_usd: netFundingUsd,
+    pending_net_carry_usd: netFundingUsd - borrowingFeeUsd,
     initial_margin_enforced: enforceInitialMargin,
     initial_margin_breach: initialMarginBreach,
     initial_margin_required_usd: initialMarginRequiredUsd,
@@ -1714,6 +1748,133 @@ export function quoteV2PositionHealth(input: {
       minimumCollateralAmountForAdmission - get(position, "collateral_amount"),
     ),
     admissible: !Boolean(health.liquidatable) && !initialMarginBreach,
+  };
+}
+
+export function quoteV2LiquidationPrice(input: {
+  market: V2StateRecord;
+  pool: V2StateRecord;
+  position: V2StateRecord;
+  collateralAssetId: BigNumberish;
+  side: BigNumberish;
+  prices?: V2PriceInput;
+}): V2QuoteResult {
+  const prices = priceSet(input.prices ?? input.market);
+  const side = n(input.side);
+  if (side !== V2_SIDE_LONG && side !== V2_SIDE_SHORT) {
+    return { ok: false, failure_reason: "invalid_side", liquidation_price: 0n, direction: "" };
+  }
+  const anchorPrice = indexPriceForClose(side, prices);
+  if (anchorPrice <= 0n) {
+    return { ok: false, failure_reason: "position_price_unavailable", liquidation_price: 0n, direction: "" };
+  }
+
+  // Reprice legs backed by the index ASA, but keep distinct backing/collateral
+  // assets fixed so synthetic markets do not imply false correlation.
+  const healthAt = (indexPrice: bigint): V2QuoteResult => quoteV2PositionHealth({
+    market: input.market,
+    pool: input.pool,
+    position: input.position,
+    collateralAssetId: input.collateralAssetId,
+    side,
+    prices: (() => {
+      const candidate: V2PriceSet = {
+        ...prices,
+        index_price: indexPrice,
+        index_price_min: indexPrice,
+        index_price_max: indexPrice,
+      };
+      if (
+        Object.prototype.hasOwnProperty.call(input.market, "index_asset_id")
+        && Object.prototype.hasOwnProperty.call(input.market, "long_asset_id")
+        && get(input.market, "index_asset_id") === get(input.market, "long_asset_id")
+      ) {
+        candidate.long_price = indexPrice;
+        candidate.long_price_min = indexPrice;
+        candidate.long_price_max = indexPrice;
+      }
+      if (
+        Object.prototype.hasOwnProperty.call(input.market, "index_asset_id")
+        && Object.prototype.hasOwnProperty.call(input.market, "short_asset_id")
+        && get(input.market, "index_asset_id") === get(input.market, "short_asset_id")
+      ) {
+        candidate.short_price = indexPrice;
+        candidate.short_price_min = indexPrice;
+        candidate.short_price_max = indexPrice;
+      }
+      return candidate;
+    })(),
+  });
+
+  const anchorHealth = healthAt(anchorPrice);
+  if (!Boolean(anchorHealth.ok)) {
+    return { ok: false, failure_reason: "position_health_unavailable", liquidation_price: 0n, direction: "" };
+  }
+  const anchorLiquidatable = Boolean(anchorHealth.liquidatable);
+  const searchUp = (side === V2_SIDE_SHORT) !== anchorLiquidatable;
+  let cursor = anchorPrice;
+  let cursorHealth = anchorHealth;
+  let oppositePrice = 0n;
+  let oppositeHealth: V2QuoteResult | null = null;
+  while (true) {
+    const candidatePrice = searchUp
+      ? min(MAX_ORACLE_PRICE, max(cursor + 1n, cursor * 2n))
+      : max(1n, cursor / 2n);
+    if (candidatePrice === cursor) break;
+    const candidateHealth = healthAt(candidatePrice);
+    if (!Boolean(candidateHealth.ok)) break;
+    if (Boolean(candidateHealth.liquidatable) !== anchorLiquidatable) {
+      oppositePrice = candidatePrice;
+      oppositeHealth = candidateHealth;
+      break;
+    }
+    cursor = candidatePrice;
+    cursorHealth = candidateHealth;
+  }
+  if (!oppositeHealth) {
+    return {
+      ok: false,
+      failure_reason: "liquidation_boundary_not_found",
+      liquidation_price: 0n,
+      direction: "",
+      current_liquidatable: anchorLiquidatable,
+    };
+  }
+
+  let lowPrice = min(cursor, oppositePrice);
+  let highPrice = max(cursor, oppositePrice);
+  const cursorIsLow = cursor === lowPrice;
+  const lowLiquidatable = Boolean((cursorIsLow ? cursorHealth : oppositeHealth).liquidatable);
+  const highLiquidatable = Boolean((cursorIsLow ? oppositeHealth : cursorHealth).liquidatable);
+  while (highPrice - lowPrice > 1n) {
+    const midPrice = (lowPrice + highPrice) / 2n;
+    if (Boolean(healthAt(midPrice).liquidatable) === lowLiquidatable) lowPrice = midPrice;
+    else highPrice = midPrice;
+  }
+
+  if (side === V2_SIDE_LONG) {
+    if (!lowLiquidatable || highLiquidatable) {
+      return { ok: false, failure_reason: "non_monotonic_liquidation_boundary", liquidation_price: 0n, direction: "" };
+    }
+    return {
+      ok: true,
+      failure_reason: "",
+      liquidation_price: lowPrice,
+      direction: "at_or_below",
+      current_index_price: anchorPrice,
+      current_liquidatable: anchorLiquidatable,
+    };
+  }
+  if (lowLiquidatable || !highLiquidatable) {
+    return { ok: false, failure_reason: "non_monotonic_liquidation_boundary", liquidation_price: 0n, direction: "" };
+  }
+  return {
+    ok: true,
+    failure_reason: "",
+    liquidation_price: highPrice,
+    direction: "at_or_above",
+    current_index_price: anchorPrice,
+    current_liquidatable: anchorLiquidatable,
   };
 }
 
@@ -1775,6 +1936,14 @@ export function quoteV2OpenPosition(input: {
       collateralPrice,
       true,
     );
+  }
+  if (existingSize === 0n) {
+    // New positions start at current factors, with no historical carry/claims.
+    const [funding, longClaim, shortClaim, borrowing] = positionFactors(input.market, collateralAssetId, side);
+    settled.funding_fee_per_size_snapshot_milli_bps = funding;
+    settled.claimable_long_token_funding_per_size_snapshot = longClaim;
+    settled.claimable_short_token_funding_per_size_snapshot = shortClaim;
+    settled.borrowing_factor_snapshot_milli_bps = borrowing;
   }
   const feeAmount = tokenAmountFromUsd(feeFromBps(sizeUsdDelta, risk.open_fee_bps), collateralPrice);
   const builderFeeAmount = tokenAmountFromUsd(
@@ -1880,6 +2049,14 @@ export function quoteV2OpenPosition(input: {
     side,
     prices,
   });
+  const postLiquidationPrice = quoteV2LiquidationPrice({
+    market: postMarket,
+    pool: input.pool,
+    position: postPosition,
+    collateralAssetId,
+    side,
+    prices,
+  });
   if (!pureTopUp && Boolean(postHealth.liquidatable)) reasons.push("position_health_breach");
   const uniqueReasons = [...new Set(reasons)];
   return withV2Meta({
@@ -1930,7 +2107,10 @@ export function quoteV2OpenPosition(input: {
     max_position_quantization_bps: V2_MAX_POSITION_QUANTIZATION_BPS,
     position_token_scale: positionScales.position_token_scale,
     position_conversion_scale: positionConversionScale,
-    ...postActionHealthFields(postHealth),
+    liquidation_price_estimate: get(postLiquidationPrice, "liquidation_price"),
+    liquidation_price_direction: String(postLiquidationPrice.direction ?? ""),
+    liquidation_price_basis: "index_asset_linked_health_boundary",
+    ...postActionHealthFields(postHealth, !pureTopUp),
     settlement_collateral_decrease: settlement.collateralDecrease,
     settlement_collateral_increase: settlement.collateralIncrease,
     funding_fee_collateral_amount: settlement.fundingFeeCollateralAmount,
@@ -2472,7 +2652,7 @@ function quoteV2CloseLike(input: {
     + forcedAccruedCostUsd;
   const remainingUsd = max(0n, creditsUsd - costsUsd);
   const maintenance = feeFromBps(sizeBefore, risk.maintenance_margin_bps);
-  const liquidatable = indexPrice > 0n && (creditsUsd <= costsUsd || remainingUsd < risk.min_collateral_usd || remainingUsd < maintenance);
+  const liquidatable = indexPrice > 0n && (creditsUsd <= costsUsd || remainingUsd < maintenance);
   if (input.liquidation && !liquidatable) reasons.push("not_liquidatable");
   const remainingSize = max(0n, sizeBefore - sizeDelta);
   const remainingCollateral = remainingSize === 0n ? 0n : max(0n, get(settled, "collateral_amount") - collateralDelta);
@@ -2505,7 +2685,31 @@ function quoteV2CloseLike(input: {
     ? costQuote.slice_same_token_credit
     : settlement.collateralIncrease;
   let postHealth: V2QuoteResult | null = null;
-  if (!input.liquidation && !adl && remainingSize > 0n) {
+  let postLiquidationPrice: V2QuoteResult | null = null;
+  let adlSurvivorEquityUsd = 0n;
+  let adlSurvivorMaintenanceUsd = 0n;
+  let adlSurvivorContractAdmissible = true;
+  if (adl) {
+    // RiskOps emergency admissibility is distinct from liquidation health.
+    if (risk.min_position_size_usd <= 0n) reasons.push("adl_bad_position_floor");
+    if (sizeTokenDelta <= 0n) reasons.push("adl_zero_tokens");
+    if (collateralDelta <= 0n) reasons.push("adl_zero_collateral");
+    if (remainingSize > 0n) {
+      const remainingTokens = get(settled, "size_tokens") - sizeTokenDelta;
+      const [profit, loss] = pnlParts(settled, side, remainingTokens, indexPrice, positionConversionScale);
+      const remainingCredit = costDeficit ? costQuote?.remaining_same_token_credit ?? 0n : 0n;
+      const remainingCost = costDeficit ? costQuote?.remaining_net_collateral_cost ?? 0n : 0n;
+      const credits = (remainingCollateral + remainingCredit) * collateralPrice / ORACLE_PRICE_SCALE + profit;
+      const costs = remainingCost * collateralPrice / ORACLE_PRICE_SCALE + loss;
+      adlSurvivorEquityUsd = credits - costs;
+      adlSurvivorMaintenanceUsd = feeFromBps(remainingSize, risk.maintenance_margin_bps);
+      adlSurvivorContractAdmissible = remainingSize >= risk.min_position_size_usd
+        && remainingTokens > 0n && credits >= costs
+        && adlSurvivorEquityUsd >= adlSurvivorMaintenanceUsd;
+      if (!adlSurvivorContractAdmissible) reasons.push("adl_survivor_guard_breach");
+    }
+  }
+  if (!input.liquidation && remainingSize > 0n) {
     const postPosition: V2StateRecord = {
       ...settled,
       market_id: n(input.marketId ?? get(market, "market_id")),
@@ -2531,13 +2735,24 @@ function quoteV2CloseLike(input: {
       side,
       prices,
     });
-    if (Boolean(postHealth.liquidatable)) reasons.push("position_health_breach");
+    postLiquidationPrice = adl ? null : quoteV2LiquidationPrice({
+      market: postMarket,
+      pool: input.pool,
+      position: postPosition,
+      collateralAssetId,
+      side,
+      prices,
+    });
+    if (Boolean(postHealth.liquidatable) && !adl) reasons.push("position_health_breach");
   }
   const dedupedReasons = [...new Set(reasons)];
   const closeMethodFee = n(input.flatFeeMicroAlgo ?? V2_DECREASE_OR_CLOSE_METHOD_FLAT_FEE_MICRO_ALGO);
   if (closeMethodFee <= 0n) throw new Error("invalid_close_fee_microalgos");
   return withV2Meta({
     type: adl ? "v2_adl" : input.liquidation ? "v2_liquidation" : "v2_decrease",
+    adl_survivor_contract_admissible: adl ? adlSurvivorContractAdmissible : null,
+    adl_survivor_equity_usd: adlSurvivorEquityUsd,
+    adl_survivor_maintenance_usd: adlSurvivorMaintenanceUsd,
     ok: dedupedReasons.length === 0,
     failure_reasons: dedupedReasons,
     owner: input.owner ?? "",
@@ -2586,6 +2801,13 @@ function quoteV2CloseLike(input: {
     pool_credit_amount: poolCreditAmount,
     remaining_size: remainingSize,
     remaining_collateral: remainingCollateral,
+    liquidation_price_estimate: postLiquidationPrice
+      ? get(postLiquidationPrice, "liquidation_price")
+      : 0n,
+    liquidation_price_direction: postLiquidationPrice
+      ? String(postLiquidationPrice.direction ?? "")
+      : "",
+    liquidation_price_basis: "index_asset_linked_health_boundary",
     ...readV2MarketPositionScales(market),
     ...decodeV2PendingImpactQty(pendingAfter),
     position_pending_impact_qty_signed_after: pendingAfter,
@@ -3882,7 +4104,7 @@ function marketAfterPositionOiDelta(
   return result;
 }
 
-function postActionHealthFields(health: V2QuoteResult | null): V2StateRecord {
+function postActionHealthFields(health: V2QuoteResult | null, admission = false): V2StateRecord {
   if (!health) {
     return {
       post_action_health: null,
@@ -3893,14 +4115,18 @@ function postActionHealthFields(health: V2QuoteResult | null): V2StateRecord {
       post_action_minimum_additional_collateral_amount: 0n,
     };
   }
+  const minimum = max(
+    n(health.minimum_collateral_amount as BigNumberish),
+    admission ? n(health.minimum_collateral_amount_for_initial_margin as BigNumberish) : 0n,
+  );
   return {
     post_action_health: health,
     post_action_liquidatable: Boolean(health.liquidatable),
     post_action_equity_usd: n(health.equity_usd as BigNumberish),
     post_action_required_remaining_usd: n(health.required_remaining_usd as BigNumberish),
-    post_action_minimum_collateral_amount: n(health.minimum_collateral_amount as BigNumberish),
-    post_action_minimum_additional_collateral_amount: n(
-      health.minimum_additional_collateral_amount as BigNumberish,
+    post_action_minimum_collateral_amount: minimum,
+    post_action_minimum_additional_collateral_amount: max(
+      0n, minimum - n(health.collateral_amount_before_cost_resolution as BigNumberish),
     ),
   };
 }

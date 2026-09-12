@@ -101,6 +101,7 @@ const quoteAndStateFunctions = [
   "quoteV2OpenPosition",
   "quoteV2DecreasePosition",
   "quoteV2PositionHealth",
+  "quoteV2LiquidationPrice",
   "quoteV2LpDeposit",
   "quoteV2LpWithdraw",
   "quoteV2SwapExactIn",

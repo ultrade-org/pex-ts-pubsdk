@@ -18,7 +18,7 @@ calculate quotes, inspect state, and prepare wallet-signed PDex V2 transactions.
 | `@pdex/sdk/integration` | Browser bootstrap, app/asset references, account authorization, and wallet submission. |
 | `@pdex/sdk/testFunds` | Wallet-safe ASA opt-in and test-network ALGO return transactions. |
 | `@pdex/sdk/v2Risk` | Margin, leverage, utilization, and risk calculations. |
-| `@pdex/sdk/v2Quotes` | Position, liquidity, swap, CVA, liquidation, and NAV quotes. |
+| `@pdex/sdk/v2Quotes` | Position health, liquidation-price estimates, funding and borrowing breakdowns, liquidity, swap, CVA, liquidation, and NAV quotes. |
 | `@pdex/sdk/v2OrderQuotes` | Open and decrease order quotes and execution previews. |
 | `@pdex/sdk/v2PositionResolution` | Position-cost reads, simulations, and action resolution. |
 | `@pdex/sdk/orders` | Order lifecycle analysis and related-order cleanup planning. |
@@ -56,7 +56,23 @@ conformance evidence.
 Applications should resolve runtime IDs and market capabilities from the
 current backend manifests instead of hard-coding a deployment generation.
 
-## Payout preparation in 0.3.0
+## Position and composition corrections in 0.3.1
+
+`quoteV2PositionHealth` separates maintenance health from the initial collateral
+floor and exposes pending funding fees, borrowing fees, and funding claims.
+`quoteV2LiquidationPrice` finds the boundary for the supplied state and prices;
+it is an estimate that changes as prices, fees, and market state change.
+New-position quotes start from current funding and borrowing factors.
+
+Unsigned position-cost simulations resolve rekeyed signers while keeping the
+account owner as transaction sender. `AccountSessionResponse.authorizing_address`
+identifies the signer bound at login; `address` remains the owner.
+
+Composition helpers distinguish repeated Math resource calls with unique notes.
+They reject duplicate business transactions and reuse of the same mutable
+transaction object. Compose complete unsigned groups before requesting signatures.
+
+## Payout preparation introduced in 0.3.0
 
 `prepareV2ActionRecall` provides strict, current recall planning for all payout
 families. `prepareV2DecreaseOrCloseInput` and

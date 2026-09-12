@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "policy_revision": "maintenance-only-20260907",
   "fixture_kind": "pdex-v2-admission-liquidation-consistency-independent-integer-vectors",
   "units": {
     "usd": "Amount6",
@@ -69,15 +70,15 @@
         "remaining_usd": 4845515,
         "maintenance_requirement_usd": 2750000,
         "below_min_collateral": true,
-        "liquidatable": true,
-        "healthy": false
+        "liquidatable": false,
+        "healthy": true
       }
     },
     {
       "id": "minimum-collateral-one-unit-below",
       "base": "near_liquidation_long",
       "overrides": {"collateral_amount_after_cost_resolution": 5688466},
-      "expected": {"remaining_usd": 4999999, "liquidatable": true}
+      "expected": {"remaining_usd": 4999999, "liquidatable": false}
     },
     {
       "id": "minimum-collateral-exact",
@@ -94,19 +95,19 @@
     {
       "id": "maintenance-one-unit-below",
       "base": "near_liquidation_long",
-      "overrides": {"collateral_amount_after_cost_resolution": 3438466, "min_collateral_usd": 1},
+      "overrides": {"collateral_amount_after_cost_resolution": 3438466},
       "expected": {"remaining_usd": 2749999, "maintenance_requirement_usd": 2750000, "below_maintenance": true, "liquidatable": true}
     },
     {
       "id": "maintenance-exact",
       "base": "near_liquidation_long",
-      "overrides": {"collateral_amount_after_cost_resolution": 3438467, "min_collateral_usd": 1},
+      "overrides": {"collateral_amount_after_cost_resolution": 3438467},
       "expected": {"remaining_usd": 2750000, "maintenance_requirement_usd": 2750000, "liquidatable": false}
     },
     {
       "id": "credits-equal-costs",
       "base": "flat_long",
-      "overrides": {"collateral_amount_after_cost_resolution": 100000, "min_collateral_usd": 1},
+      "overrides": {"collateral_amount_after_cost_resolution": 100000},
       "expected": {"credits_usd": 100000, "costs_usd": 100000, "below_or_equal_costs": true, "liquidatable": true}
     },
     {
@@ -119,7 +120,7 @@
       "id": "accrued-cost-counted",
       "base": "flat_long",
       "overrides": {"accrued_cost_usd": 5000000},
-      "expected": {"costs_usd": 5100000, "remaining_usd": 4900000, "below_min_collateral": true, "liquidatable": true}
+      "expected": {"costs_usd": 5100000, "remaining_usd": 4900000, "below_min_collateral": true, "liquidatable": false}
     },
     {
       "id": "same-token-credit-counted",

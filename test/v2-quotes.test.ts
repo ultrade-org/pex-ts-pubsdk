@@ -22,6 +22,8 @@ import {
   quoteV2CvaMarketWithdraw,
   quoteV2CvaWithdrawRoute,
   quoteV2Liquidation,
+  quoteV2LiquidationPrice,
+  quoteV2PositionHealth,
   quoteV2LpDeposit,
   maximumV2LpWithdrawableShares,
   quoteV2DirectLpWithdrawCooldown,
@@ -198,17 +200,17 @@ test("V2 admission boundaries and recovery paths match the contract policy", () 
     prices,
   };
 
-  const belowMinimum = quoteV2OpenPosition({ ...common, collateralAmount: 5_599_982n });
+  const reproduced = quoteV2OpenPosition({ ...common, collateralAmount: 5_599_982n });
   const oneBelow = quoteV2OpenPosition({ ...common, collateralAmount: 5_754_466n });
   const exact = quoteV2OpenPosition({ ...common, collateralAmount: 5_754_467n });
 
-  assert.equal(belowMinimum.ok, false);
-  assert.equal(belowMinimum.size_token_delta, 133_824_699n);
-  assert.equal(belowMinimum.post_action_equity_usd, 4_845_515n);
-  assert.equal((belowMinimum.failure_reasons as string[]).includes("position_health_breach"), true);
-  assert.equal(oneBelow.ok, false);
+  assert.equal(reproduced.ok, true);
+  assert.equal(reproduced.size_token_delta, 133_824_699n);
+  assert.equal(reproduced.post_action_equity_usd, 4_845_515n);
+  assert.equal(reproduced.post_action_liquidatable, false);
+  assert.equal(oneBelow.ok, true);
   assert.equal(oneBelow.post_action_equity_usd, 4_999_999n);
-  assert.equal((oneBelow.failure_reasons as string[]).includes("position_health_breach"), true);
+  assert.equal(oneBelow.post_action_liquidatable, false);
   assert.equal(exact.ok, true, String(exact.failure_reasons));
   assert.equal(exact.post_action_equity_usd, 5_000_000n);
 
@@ -261,13 +263,13 @@ test("V2 admission boundaries and recovery paths match the contract policy", () 
     prices,
   });
 
-  assert.equal(partial.ok, false);
+  assert.equal(partial.ok, true);
   assert.equal(partial.post_action_equity_usd, 4_545_455n);
-  assert.equal((partial.failure_reasons as string[]).includes("position_health_breach"), true);
+  assert.equal(partial.post_action_liquidatable, false);
   assert.equal(full.ok, true, String(full.failure_reasons));
   assert.equal(full.remaining_size, 0n);
   assert.equal(pureTopUp.ok, true, String(pureTopUp.failure_reasons));
-  assert.equal(pureTopUp.post_action_liquidatable, true);
+  assert.equal(pureTopUp.post_action_liquidatable, false);
 });
 
 test("V2 CVA allocation quotes match shared sizing fixture", () => {
@@ -2500,7 +2502,7 @@ test("V2 liquidation quote ignores positive impact for eligibility", () => {
     side: V2_SIDE_LONG,
     size_usd: 50_000_000n,
     size_tokens: 1_000_000n,
-    collateral_amount: 9_950_000n,
+    collateral_amount: 5_950_000n,
     entry_price: p(50_000_000_000n),
   };
 
@@ -2516,7 +2518,7 @@ test("V2 liquidation quote ignores positive impact for eligibility", () => {
 
   assert.equal(quote.ok, true);
   assert.equal(quote.impact_positive_usd, 200_000n);
-  assert.equal(quote.equity_usd, 4_900_000n);
+  assert.equal(quote.equity_usd, 900_000n);
   assert.equal(quote.liquidatable, true);
 });
 
@@ -3093,3 +3095,208 @@ function priceState(
     short_price_max: short,
   };
 }
+
+test("V2 position health exposes exact pending carry components", () => {
+  const market = marketState({
+    position_impact_factor_bps: 0n,
+    max_position_impact_bps: 0n,
+    close_fee_bps: 6n,
+    opposing_trader_share_bps: 2_500n,
+    short_funding_fee_per_size_with_short_collateral_milli_bps: 1_000n,
+    short_borrowing_factor_milli_bps: 3_000n,
+    short_token_claimable_funding_per_size_for_shorts: 40_000_000n,
+  });
+  const health = quoteV2PositionHealth({
+    market,
+    pool: poolState(),
+    position: {
+      side: V2_SIDE_SHORT,
+      size_usd: 5_000_000n,
+      size_tokens: 100_000n,
+      collateral_amount: 5_007_000n,
+      entry_price: 50_000_000_000_000_000n,
+    },
+    collateralAssetId: USDC,
+    side: V2_SIDE_SHORT,
+    prices: priceState(),
+  });
+
+  assert.equal(health.pending_funding_fee_usd, 500n);
+  assert.equal(health.pending_borrowing_fee_usd, 1_500n);
+  assert.equal(health.pending_total_fee_usd, 2_000n);
+  assert.equal(health.pending_funding_claim_short_amount, 50n);
+  assert.equal(health.pending_funding_claim_usd, 50n);
+  assert.equal(health.pending_net_funding_usd, -450n);
+  assert.equal(health.pending_net_carry_usd, -1_950n);
+});
+
+test("V2 liquidation price is the exact index-only health boundary", () => {
+  const backingAsset = 99n;
+  const market = marketState({
+    index_asset_id: BTC,
+    long_asset_id: backingAsset,
+    position_conversion_scale: 100_000_000_000n,
+    min_collateral_usd: 5_000_000n,
+    maintenance_margin_bps: 250n,
+    position_impact_factor_bps: 0n,
+    max_position_impact_bps: 0n,
+    close_fee_bps: 6n,
+    max_liquidation_impact_bps: 50n,
+    opposing_trader_share_bps: 2_500n,
+    short_funding_fee_per_size_with_short_collateral_milli_bps: 0n,
+    short_borrowing_factor_milli_bps: 56n,
+    short_token_claimable_funding_per_size_for_shorts: 46_719_800_000n,
+  });
+  const pool = poolState();
+  const position = {
+    side: V2_SIDE_SHORT,
+    size_usd: 5_000_000n,
+    size_tokens: 5_520_093n,
+    collateral_amount: 5_007_000n,
+    entry_price: 90_578_184_099n,
+  };
+  const prices = {
+    index_price: 95_350_000_000n,
+    index_price_min: 95_350_000_000n,
+    index_price_max: 95_350_000_000n,
+    long_price: 8_000_000_000_000n,
+    long_price_min: 8_000_000_000_000n,
+    long_price_max: 8_000_000_000_000n,
+    short_price: SCALE,
+    short_price_min: SCALE,
+    short_price_max: SCALE,
+  };
+  const estimate = quoteV2LiquidationPrice({
+    market,
+    pool,
+    position,
+    collateralAssetId: USDC,
+    side: V2_SIDE_SHORT,
+    prices,
+  });
+
+  assert.equal(estimate.ok, true);
+  assert.equal(estimate.direction, "at_or_above");
+  const boundary = estimate.liquidation_price as bigint;
+  const atBoundary = quoteV2PositionHealth({
+    market,
+    pool,
+    position,
+    collateralAssetId: USDC,
+    side: V2_SIDE_SHORT,
+    prices: { ...prices, index_price: boundary, index_price_min: boundary, index_price_max: boundary },
+  });
+  const beforeBoundary = quoteV2PositionHealth({
+    market,
+    pool,
+    position,
+    collateralAssetId: USDC,
+    side: V2_SIDE_SHORT,
+    prices: { ...prices, index_price: boundary - 1n, index_price_min: boundary - 1n, index_price_max: boundary - 1n },
+  });
+  assert.equal(atBoundary.liquidatable, true);
+  assert.equal(beforeBoundary.liquidatable, false);
+});
+
+test("V2 liquidation price reprices a collateral leg backed by the index asset", () => {
+  const market = marketState({
+    min_collateral_usd: 5_000_000n,
+    maintenance_margin_bps: 500n,
+    position_impact_factor_bps: 0n,
+    max_position_impact_bps: 0n,
+    close_fee_bps: 0n,
+    max_liquidation_impact_bps: 0n,
+  });
+  const pool = poolState();
+  const position = {
+    side: V2_SIDE_LONG,
+    size_usd: 5_000_000n,
+    size_tokens: 100_000_000n,
+    collateral_amount: 200_000n,
+    entry_price: 50_000_000_000_000n,
+  };
+  const prices = priceState({ index_price: 50_000_000_000_000n });
+  const estimate = quoteV2LiquidationPrice({
+    market,
+    pool,
+    position,
+    collateralAssetId: BTC,
+    side: V2_SIDE_LONG,
+    prices,
+  });
+
+  assert.equal(estimate.ok, true);
+  assert.equal(estimate.direction, "at_or_below");
+  const boundary = estimate.liquidation_price as bigint;
+  const atBoundary = quoteV2PositionHealth({
+    market,
+    pool,
+    position,
+    collateralAssetId: BTC,
+    side: V2_SIDE_LONG,
+    prices: priceState({ index_price: boundary, long_price: boundary }),
+  });
+  const afterBoundary = quoteV2PositionHealth({
+    market,
+    pool,
+    position,
+    collateralAssetId: BTC,
+    side: V2_SIDE_LONG,
+    prices: priceState({ index_price: boundary + 1n, long_price: boundary + 1n }),
+  });
+  assert.equal(atBoundary.liquidatable, true);
+  assert.equal(afterBoundary.liquidatable, false);
+});
+
+test("V2 entry floor stays in admission but does not trigger liquidation", () => {
+  const common = {
+    market: marketState({ maintenance_margin_bps: 250n, close_fee_bps: 6n,
+      position_impact_factor_bps: 0n, max_position_impact_bps: 0n }),
+    pool: poolState(), collateralAssetId: USDC, side: V2_SIDE_SHORT,
+    prices: priceState(), position: { size_usd: 5_000_000n, size_tokens: 100_000n,
+      collateral_amount: 4_999_999n, entry_price: p(50_000_000_000n) },
+  };
+  const maintenance = quoteV2PositionHealth(common);
+  const admission = quoteV2PositionHealth({ ...common, enforceInitialMargin: true });
+  assert.equal(maintenance.liquidatable, false);
+  assert.equal(maintenance.required_remaining_usd, 125_000n);
+  assert.equal(admission.initial_margin_breach, true);
+  assert.equal(admission.minimum_collateral_amount_for_admission, 5_000_000n);
+  assert.equal(admission.liquidatable, false);
+});
+
+test("ADL survivor accounting matches hand-derived contract vectors", () => {
+  const fixture = JSON.parse(readFileSync(resolve(process.cwd(), "test/fixtures/v2-adl-survivor-policy-v1.json"), "utf8"),
+    (_key, value) => typeof value === "number" ? BigInt(value) : value);
+  for (const vector of fixture.cases) {
+    const args = {
+      market: { ...fixture.market, ...vector.market },
+      pool: { ...fixture.pool, ...vector.pool },
+      position: { ...fixture.position, ...vector.position },
+      prices: { ...fixture.prices, ...vector.prices },
+      sizeUsdDelta: vector.size_usd_delta ?? fixture.size_usd_delta,
+      side: vector.position?.side ?? 1n,
+    };
+    const quote = vector.family === "single_token"
+      ? quoteV2SingleTokenAdl({ ...args, backingAssetId: 12n })
+      : quoteV2Adl({ ...args, collateralAssetId: 12n });
+    for (const [key, expected] of Object.entries(vector.expected)) {
+      assert.deepEqual(quote[key], expected, `${vector.id}: ${key}`);
+    }
+  }
+});
+
+test("open quote reports admission collateral separately from liquidation health", () => {
+  const fixture = JSON.parse(readFileSync(resolve(process.cwd(), "test/fixtures/v2-adl-survivor-policy-v1.json"), "utf8"),
+    (_key, value) => typeof value === "number" ? BigInt(value) : value);
+  const quote = quoteV2OpenPosition({
+    market: { ...fixture.market, position_impact_factor_bps: 0n },
+    pool: fixture.pool, prices: fixture.prices, side: 1n,
+    collateralAssetId: 12n, sizeUsdDelta: 5_000_000n,
+    collateralAmount: 100_000n, acceptablePrice: 2_000_000_000_000n,
+  });
+  assert.equal(quote.ok, false);
+  assert.equal((quote.post_action_health as any).pending_total_fee_usd, 0n);
+  assert.equal(quote.post_action_minimum_collateral_amount, 5_000_000n);
+  assert.ok((quote.post_action_health as any).minimum_collateral_amount < 5_000_000n);
+});

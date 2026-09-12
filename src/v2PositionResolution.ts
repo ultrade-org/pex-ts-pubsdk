@@ -1110,6 +1110,9 @@ export async function simulateV2PositionCostResolution(
   const request = new modelsv2.SimulateRequest({
     txnGroups: [group],
     allowEmptySignatures: true,
+    // This unsigned quote must also work when sender has a different auth-addr.
+    // Algod resolves that signer for simulation; the transaction keeps its owner.
+    fixSigners: true,
   });
   const simulation = await requestDo(algod.simulateTransactions(request)) as any;
   const decoded = decodeV2PositionCostSimulation(simulation, manifest);

@@ -5954,8 +5954,40 @@ function grouped(
   applyV2LargeProgramReadBudgetToTransactions(txns, primaryIndex);
   validateAbiTransactionArguments(txns);
   for (const txn of txns) txn.group = undefined;
+  distinguishRepeatedMathCarriers(txns);
   const transactions = assignGroupID(txns) as MetadataBearingTransactions;
   return attachV2TransactionGroupMetadata(transactions, primaryIndex, primaryAppName);
+}
+
+function distinguishRepeatedMathCarriers(transactions: Transaction[]): void {
+  // Independently built refresh/action groups can carry the same Math resource
+  // call. Both calls are needed, but Algorand forbids repeated transaction IDs.
+  // A note distinguishes the helper without changing ordering, resources or fees.
+  const reserved = new Set(transactions.map((transaction) => transaction.txID()));
+  const seen = new Set<string>();
+  for (const [index, transaction] of transactions.entries()) {
+    let id = transaction.txID();
+    if (seen.has(id)) {
+      const metadata = (transaction as MetadataBearingTransaction)[V2_APPLICATION_CALL_METADATA];
+      if (metadata?.appName !== "PDexV2Math" || metadata.method !== "noop") {
+        throw new Error("duplicate_non_carrier_transaction");
+      }
+      const originalNote = transaction.note;
+      let nonce = 0;
+      do {
+        const suffix = new TextEncoder().encode(`pdex-v2-carrier:${index}:${nonce++}`);
+        const note = concat([originalNote, suffix]);
+        if (note.length > 1_024) throw new Error("duplicate_carrier_note_too_long");
+        (transaction as unknown as { note: Uint8Array }).note = note;
+        id = transaction.txID();
+      } while (reserved.has(id) || seen.has(id));
+    }
+    seen.add(id);
+  }
+  // Reusing the very same mutable Transaction object cannot be disambiguated.
+  if (new Set(transactions.map((transaction) => transaction.txID())).size !== transactions.length) {
+    throw new Error("duplicate_transaction_object");
+  }
 }
 
 function applyV2LargeProgramReadBudgetToTransactions(
