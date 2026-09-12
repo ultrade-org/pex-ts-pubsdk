@@ -2,8 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { encodeAddress, getApplicationAddress } from "algosdk";
 import { buildV2WithdrawLiquidityWithSwapCall } from "../src/transactions.js";
+import { setProtocolManifest } from "../src/manifest.js";
 
 test("single-output LP withdrawal carries both providers for input-asset fees", () => {
+  const args = ["uint64", "uint64", "uint64", "uint64", "uint64", "byte[]", "byte[]", "uint64", "uint64", "uint64"];
+  setProtocolManifest({ apps: {
+    PDexV2Math: { method_specs: { noop: { signature: "noop()void", args: [], returns: { type: "void" } } } },
+    PDexV2AdminOps: { method_specs: { withdraw_liquidity_with_swap: {
+      signature: `withdraw_liquidity_with_swap(${args.join(",")})byte[]`,
+      args: args.map((type) => ({ type })), returns: { type: "byte[]" },
+    } } },
+  } }, 2);
   const owner = encodeAddress(new Uint8Array(32).fill(1));
   const proposer = encodeAddress(new Uint8Array(32).fill(2));
   const registry = {
