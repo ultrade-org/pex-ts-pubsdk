@@ -56,6 +56,7 @@ const expectedTestFiles = [
   "fixtures",
   "funding-recipient-split.test.ts",
   "integration.test.ts",
+  "lp-swap-recall.test.ts",
   "margin-adjustment.test.ts",
   "position-token-precision.test.ts",
   "public-capabilities.test.ts",
