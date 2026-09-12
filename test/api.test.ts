@@ -156,6 +156,10 @@ test("signed oracle payload falls back to the backend when the public artifact t
       throw new TypeError("Failed to fetch");
     }
     if (url.startsWith("https://pdex.example/v2/oracle/7?")) {
+      const params = new URL(url).searchParams;
+      if (params.get("oracle_message_version") !== "3" || params.get("price_scale") !== "1000000000000") {
+        return new Response("oracle response requires an explicit Price12 context", { status: 400 });
+      }
       return new Response(JSON.stringify({
         protocol_version: 2,
         oracle_message_version: V2_ORACLE_MESSAGE_VERSION,

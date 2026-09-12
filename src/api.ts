@@ -680,6 +680,8 @@ export class PdexApiClient {
 
   private async getV2OraclePayloadFromBackend(input: Parameters<PdexApiClient["v2OraclePayload"]>[0]): Promise<BackendV2OraclePayload> {
     const payload = await this.get<BackendV2OraclePayload>(`/v2/oracle/${pathPart(input.marketId)}?${queryString({
+      oracle_message_version: V2_ORACLE_MESSAGE_VERSION,
+      price_scale: ORACLE_PRICE_SCALE,
       app_id: input.appId,
       target: input.target,
       asset_id: input.assetId,
