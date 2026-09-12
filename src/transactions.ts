@@ -1048,13 +1048,14 @@ export function buildV2WithdrawLiquidityWithSwapCall(input: V2WithdrawLiquidityW
     flatFeeMicroAlgo: V2_WITHDRAW_WITH_SWAP_METHOD_FLAT_FEE_MICRO_ALGO,
     manifest: input.manifest ?? loadManifest(undefined, 2),
   });
+  // Both pool assets may fund fees/impact even for a one-token withdrawal.
   const recallAssets: BigNumberish[] = [];
   let recallCount = 0;
-  if ((outputMode === 0 || outputMode === 1) && bigint(maxLongReceiptAmount) > 0n) {
+  if (bigint(maxLongReceiptAmount) > 0n) {
     recallAssets.push(input.longAssetId);
     recallCount += 1;
   }
-  if ((outputMode === 0 || outputMode === 2) && bigint(maxShortReceiptAmount) > 0n) {
+  if (bigint(maxShortReceiptAmount) > 0n) {
     recallAssets.push(input.shortAssetId);
     recallCount += 1;
   }
@@ -1076,12 +1077,12 @@ export function buildV2WithdrawLiquidityWithSwapCall(input: V2WithdrawLiquidityW
       {
         marketId: input.marketId,
         assetId: input.longAssetId,
-        receiptCap: outputMode === 0 || outputMode === 1 ? maxLongReceiptAmount : 0,
+        receiptCap: maxLongReceiptAmount,
       },
       {
         marketId: input.marketId,
         assetId: input.shortAssetId,
-        receiptCap: outputMode === 0 || outputMode === 2 ? maxShortReceiptAmount : 0,
+        receiptCap: maxShortReceiptAmount,
       },
     ],
   );
