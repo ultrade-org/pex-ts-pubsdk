@@ -160,6 +160,26 @@ Use the prepared result, including its explicit zero mode for a market with no
 configured yield. The SDK cannot secure transactions constructed by other
 clients or replace contract enforcement of market-owned liquidity.
 
+### Already-triggered TP and SL submissions
+
+Standalone `submit_order` can execute immediately when its signed OrderOps
+oracle has already crossed the trigger. That inline branch has no recall-cap
+arguments. For a crossed TP/SL, obtain a Trading (or SingleTokenTrading) oracle,
+recheck the trigger against that exact message, and submit the recall-prepared
+close instead. Use index minimum for a long and index maximum for a short;
+TP crosses at `>=` for long and `<=` for short, SL at `<=` for long and `>=`
+for short. Preserve size, acceptable price and minimum output. If the trigger
+is no longer crossed, refresh rather than signing a direct close. For GTD,
+require the close oracle's expiry to be strictly before the order deadline;
+otherwise stop and request a later deadline. The contract oracle age limit
+then also bounds the close by the user's deadline.
+
+Uncrossed orders remain stored, and their signed oracle fixes that submission
+decision during wallet signing. Keeper `execute_order` must prepare its own
+fresh recall plan. Active linked child TP/SL orders are stored even when
+crossed and use this keeper path. Do not assume that passing recall resources
+alone adds recall authorization to standalone submission.
+
 ## 6. Fetch signed oracle data
 
 Use `v2OracleArgs()` with the destination application ID and action target. The
