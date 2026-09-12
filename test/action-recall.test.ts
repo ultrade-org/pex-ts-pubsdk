@@ -48,6 +48,23 @@ function fixture(options: { configured?: boolean; hot?: bigint } = {}) {
 
 const input = { marketId: 7, expectedMarketsAppId: 2001, indexAssetId: 0, assetIds: [0, 12], outputs: [{ assetId: 0, requiredHotAmount: 1355832n }] };
 
+test("embedded registry retains the plan snapshot when a later read would advance rounds", async () => {
+  const f = fixture();
+  const original = f.client.v2MarketYieldActionRecallPlan;
+  const client = { ...f.client,
+    async v2MarketYieldActionRecallPlan(payload: Record<string, unknown>) {
+      return { ...await original(payload), market_yield_registry: f.currentRegistry };
+    },
+    async v2MarketYieldResourceRegistry(): Promise<Record<string, unknown>> {
+      throw new Error("later registry read raced the plan");
+    },
+  };
+  const result = await prepareV2ActionRecall(client, { ...input, marketYieldRegistry: { registry_hash: "another-round" } });
+  assert.equal(result.capForAsset(0), 2000000n);
+  f.currentRegistry.registry_hash = "tampered";
+  await assert.rejects(prepareV2ActionRecall(client, input), /registry hash mismatch|stale or incomplete/);
+});
+
 test("recall preparation covers ALGO shortfall and still authorizes recall when idle cash covers the preview", async () => {
   for (const hot of [131401n, 10000000n]) {
     const f = fixture({ hot });

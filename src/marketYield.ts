@@ -121,10 +121,14 @@ export async function prepareV2ActionRecall(
   if (typeof version !== "string" || !version || typeof hash !== "string" || !hash) {
     throw new Error("Yield recall plan is missing registry identity");
   }
-  let registry = input.marketYieldRegistry;
+  let registry = plan.market_yield_registry !== undefined
+    ? record(plan.market_yield_registry, "embedded resource registry")
+    : input.marketYieldRegistry;
   const matches = (value: Record<string, unknown> | undefined) => value?.registry_version === version && value?.registry_hash === hash
     && Array.isArray(value?.strategies) && Array.isArray(value?.markets);
-  if (!matches(registry)) registry = record(await client.v2MarketYieldResourceRegistry(), "resource registry");
+  if (plan.market_yield_registry === undefined && !matches(registry)) {
+    registry = record(await client.v2MarketYieldResourceRegistry(), "resource registry");
+  }
   if (!matches(registry)) throw new Error("Yield recall registry remained stale or incomplete after refresh");
   const currentRegistry = registry!;
   // Mode 0 still requires authentic, complete resource metadata.
