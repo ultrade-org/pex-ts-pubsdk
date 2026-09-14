@@ -3277,6 +3277,12 @@ test("ADL survivor accounting matches hand-derived contract vectors", () => {
       sizeUsdDelta: vector.size_usd_delta ?? fixture.size_usd_delta,
       side: vector.position?.side ?? 1n,
     };
+    // The economic fixture inherits pair short-collateral factors. Encode its
+    // single-token cases in the contract's long collateral storage slot.
+    if (vector.family === "single_token") {
+      args.market.long_funding_fee_per_size_with_long_collateral_milli_bps = args.market.long_funding_fee_per_size_with_short_collateral_milli_bps;
+      args.market.long_funding_fee_per_size_with_short_collateral_milli_bps = 0n;
+    }
     const quote = vector.family === "single_token"
       ? quoteV2SingleTokenAdl({ ...args, backingAssetId: 12n })
       : quoteV2Adl({ ...args, collateralAssetId: 12n });
@@ -3299,4 +3305,23 @@ test("open quote reports admission collateral separately from liquidation health
   assert.equal((quote.post_action_health as any).pending_total_fee_usd, 0n);
   assert.equal(quote.post_action_minimum_collateral_amount, 5_000_000n);
   assert.ok((quote.post_action_health as any).minimum_collateral_amount < 5_000_000n);
+});
+
+
+test("Single-token quotes use long funding slots for ASA and native ALGO backing", () => {
+  for (const asset of [0n, BTC]) for (const side of [V2_SIDE_LONG, V2_SIDE_SHORT]) {
+    const market = singleTokenMarketState({long_asset_id:asset,short_asset_id:asset,
+      long_funding_fee_per_size_with_long_collateral_milli_bps:1000n,
+      short_funding_fee_per_size_with_long_collateral_milli_bps:2000n,
+      long_funding_fee_per_size_with_short_collateral_milli_bps:0n,
+      short_funding_fee_per_size_with_short_collateral_milli_bps:0n});
+    const health = quoteV2PositionHealth({market,pool:poolState(),side,collateralAssetId:asset,
+      position:{side,size_usd:5000000n,size_tokens:100000n,collateral_amount:5000000n,entry_price:SCALE},
+      prices:priceState({index_price:SCALE,long_price:SCALE,short_price:SCALE})});
+    assert.equal(health.pending_funding_fee_usd,side===V2_SIDE_LONG?500n:1000n);
+    const lp=quoteV2SingleTokenLpDeposit({market,pool:{...poolState(),short_pool_amount:0n},
+      backingAmount:1000000n,prices:priceState({index_price:SCALE,long_price:SCALE,short_price:SCALE})});
+    assert.equal((lp.failure_reasons as string[]).includes("not_single_token_market"),false);
+    assert.equal(lp.backing_asset_id,asset);
+  }
 });

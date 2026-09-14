@@ -33,11 +33,11 @@ npm run build
 npm pack --ignore-scripts
 ```
 
-The final command creates `pdex-sdk-0.3.1.tgz`. Install that exact tarball in
+The final command creates `pdex-sdk-0.3.2.tgz`. Install that exact tarball in
 your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm install --save-exact /path/to/pdex-sdk-0.3.1.tgz --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.3.2.tgz --ignore-scripts
 ```
 
 ## Updating to 0.3.1
@@ -239,3 +239,7 @@ npm run check:package
 npm test
 npm pack --dry-run --ignore-scripts --json
 ```
+
+### 0.3.2 quote corrections
+
+Single-token quotes read funding from the contract's long collateral slot for both position sides. Native ALGO (asset ID zero) is accepted as single-token backing. This patch changes local quote calculations; integrations keep their existing API and transaction interfaces.

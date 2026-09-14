@@ -3186,7 +3186,10 @@ function lpNavRequest(input: {
 }
 
 function isSingleTokenMarket(market: V2StateRecord): boolean {
-  return get(market, "long_asset_id") > 0n && get(market, "long_asset_id") === get(market, "short_asset_id");
+  // Native ALGO is asset zero. Require explicit equal backing IDs so an
+  // incomplete record is not accidentally classified as a single-token market.
+  return market.long_asset_id !== undefined && market.short_asset_id !== undefined
+    && get(market, "long_asset_id") === get(market, "short_asset_id");
 }
 
 function singleTokenMarketReasons(market: V2StateRecord): string[] {
@@ -3849,14 +3852,14 @@ function opposingTraderShareBps(market: V2StateRecord): bigint {
 function positionFactors(market: V2StateRecord, collateralAssetId: bigint, side: bigint): [bigint, bigint, bigint, bigint] {
   if (side === V2_SIDE_SHORT) {
     return [
-      get(market, collateralAssetId === get(market, "short_asset_id") ? "short_funding_fee_per_size_with_short_collateral_milli_bps" : "short_funding_fee_per_size_with_long_collateral_milli_bps"),
+      get(market, !isSingleTokenMarket(market) && collateralAssetId === get(market, "short_asset_id") ? "short_funding_fee_per_size_with_short_collateral_milli_bps" : "short_funding_fee_per_size_with_long_collateral_milli_bps"),
       get(market, "long_token_claimable_funding_per_size_for_shorts"),
       get(market, "short_token_claimable_funding_per_size_for_shorts"),
       get(market, "short_borrowing_factor_milli_bps"),
     ];
   }
   return [
-    get(market, collateralAssetId === get(market, "short_asset_id") ? "long_funding_fee_per_size_with_short_collateral_milli_bps" : "long_funding_fee_per_size_with_long_collateral_milli_bps"),
+    get(market, !isSingleTokenMarket(market) && collateralAssetId === get(market, "short_asset_id") ? "long_funding_fee_per_size_with_short_collateral_milli_bps" : "long_funding_fee_per_size_with_long_collateral_milli_bps"),
     get(market, "long_token_claimable_funding_per_size_for_longs"),
     get(market, "short_token_claimable_funding_per_size_for_longs"),
     get(market, "long_borrowing_factor_milli_bps"),
