@@ -4,22 +4,32 @@ This walkthrough shows the complete public application path: load deployment
 context, select normalized market data, authorize account reads, build a wallet
 group, submit it, and decode its receipt.
 
+It requires a compatible backend and Algorand node/gateway that **you operate**.
+Implement the [backend integration requirements](./BACKEND_INTEGRATION.md) first;
+this package does not supply those services. The examples use MainNet and can
+submit real transactions when completed with a wallet. Test your implementation
+before enabling signing. Your wallet adapter supplies `address`, `signBytes`
+and `signTransactions`; `collateralAmount` and `sizeUsdDelta` are user-reviewed
+integer amounts supplied by your application.
+
 All token and USD amounts are integer Amount6 values. Oracle prices are Price12
 integers. Keep values as `bigint` until formatting them for display.
 
 ## 1. Load the current deployment and market catalog
 
 ```ts
+import algosdk from "algosdk";
 import { loadPdexContext } from "@pdex/sdk/integration";
 
+const algod = new algosdk.Algodv2("", import.meta.env.VITE_BUILDER_ALGOD_URL, "");
 const pdex = await loadPdexContext({
-  baseUrl: "https://api.example",
-  publicArtifactBaseUrl: "https://artifacts.example",
-  network: "testnet",
+  baseUrl: import.meta.env.VITE_BUILDER_API_URL,
+  publicArtifactBaseUrl: "https://pub-1e72beea87f04ebfafce248132310425.r2.dev/mainnet",
+  network: "mainnet",
 });
 
-const market = pdex.markets.find((item) => item.marketId === "7");
-if (!market) throw new Error("Market 7 is unavailable");
+const market = pdex.markets.find((item) => !item.singleToken);
+if (!market) throw new Error("No pair market is available");
 
 const pool = pdex.pools.find((item) => item.marketId === market.marketId);
 if (!pool) throw new Error(`Pool for market ${market.marketId} is unavailable`);
@@ -35,10 +45,16 @@ property.
 ```ts
 import { authorizePdexAccount } from "@pdex/sdk/integration";
 
+const networkParams = await algod.getTransactionParams().do();
+if (networkParams.genesisID !== "mainnet-v1.0" || !networkParams.genesisHash) {
+  throw new Error("A MainNet node with genesis information is required");
+}
+const genesisId = networkParams.genesisID;
+const genesisHash = btoa(String.fromCharCode(...networkParams.genesisHash));
 const { session } = await authorizePdexAccount({
   client: pdex.client,
   address,
-  network: "testnet",
+  network: "mainnet",
   genesisId,
   genesisHash,
   origin: window.location.origin,

@@ -1,0 +1,103 @@
+PEX Builder License 1.0
+
+Copyright (c) 2026 the PEX software copyright holders.
+
+1. Scope and acceptance
+
+This license applies to the files in this repository, and their distributed
+builds, that are not identified as being under a different license (the
+"Software"). The "Licensors" are the copyright holders offering their rights
+in the Software under these terms. Each Licensor grants only rights that it
+owns or is entitled to license. Exercising rights granted by this license
+constitutes acceptance of its conditions.
+
+An "Official PEX Deployment" is a PEX/PDex protocol deployment identified as
+official by the maintainers of https://github.com/ultrade-org/pex-ts-pubsdk,
+including its official upgrades and official test networks. Merely copying
+its code, parameters, names, or metadata does not make a deployment official.
+
+2. Commercial builder permission
+
+Subject to this license, the Licensors grant you a worldwide, non-exclusive,
+royalty-free copyright license to use, reproduce, modify, prepare derivative
+works of, and distribute the Software in source or compiled form to develop,
+operate, maintain, and support products that integrate with Official PEX
+Deployments.
+
+Permitted products include independently branded trading interfaces, wallets,
+bots, liquidity tools, analytics, SDK adaptations, and backend services. You
+may charge for your products and services, collect protocol-supported builder
+fees, serve your own customers, and run your own nodes, indexers, databases,
+and compatible HTTP APIs. You are not required to use a PEX-operated backend.
+These uses are permitted even if your interface or service competes with a
+PEX-operated interface or service on the same Official PEX Deployments.
+
+You may include the Software in a product that also supports other protocols,
+provided the Software and derivatives of it are used only for its PEX
+integration and not to implement, operate, or support those other protocols.
+
+You may also use and modify the Software for education, evaluation, security
+research, and non-production testing, including isolated local deployments.
+This testing permission does not authorize operating an independent protocol
+for public trading or accepting real customer funds on such a deployment.
+
+3. Independent protocol restriction
+
+You may not use, modify, distribute, or provide the Software or derivatives
+of it to create, launch, operate, commercialize, or materially support a
+separate exchange, trading, liquidity, or lending protocol that is a substitute
+for or competes with PEX/PDex outside Official PEX Deployments. This includes
+forks or copies of PEX contracts and independent deployments using different
+contract addresses, names, operators, interfaces, or networks. It applies to
+both free and paid offerings and to providing the Software to others for
+those purposes. The non-production uses expressly permitted in section 2
+remain permitted.
+
+This is a condition on use of the Software, not a restriction on independently
+written software that does not contain, derive from, or use the Software.
+Uses outside this license require separate written permission from the
+relevant Licensors.
+
+4. Distribution and your own code
+
+When distributing any part of the Software or a derivative, including in a
+browser bundle, provide this license and preserve its copyright and license
+notices. A license file supplied with the product, or an accessible legal
+notices page containing the complete license, satisfies this requirement.
+Identify material modifications without implying that PEX made them.
+
+Recipients receive rights to the Software directly under this license. You
+may not relicense the Software or its derivatives on terms that remove these
+conditions. You retain ownership of your original contributions. Your own
+separate application code may remain proprietary or use another license;
+this license does not require you to publish it or your modifications.
+
+5. Other rights and services
+
+Third-party components remain subject to their respective licenses. This
+license grants no rights in code from other repositories, including protocol
+contracts or backend software, unless that code is separately offered under
+these terms. It does not grant trademark rights, endorsement, access to
+private systems, a service entitlement, or a right to PEX-operated APIs.
+Truthful identification of your product's PEX compatibility is permitted
+without implying endorsement. Rights that applicable law gives you
+independently of this license are not restricted.
+
+6. Termination
+
+Your rights under this license end if you violate its conditions. For a first
+violation, they are reinstated if you stop the violation, fully correct it,
+and take reasonable steps to remedy its effects within 30 days after receiving
+written notice. Later violations require written reinstatement. Termination
+does not terminate a compliant recipient's own license. A compliant user may
+continue using the version received under these terms; a later license change
+does not retroactively change that version's terms.
+
+7. Disclaimer and limitation of liability
+
+TO THE EXTENT PERMITTED BY APPLICABLE LAW, THE SOFTWARE IS PROVIDED "AS IS",
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NONINFRINGEMENT.
+THE LICENSORS ARE NOT LIABLE FOR CLAIMS, DAMAGES, OR OTHER LIABILITY ARISING
+FROM THE SOFTWARE OR ITS USE, INCLUDING LOSS OF FUNDS, PROFITS, OR DATA,
+WHETHER IN CONTRACT, TORT, OR OTHERWISE, EVEN IF ADVISED OF THE POSSIBILITY.

@@ -2,6 +2,9 @@
 
 This guide describes the browser and wallet sequence for a PDex application.
 For a continuous example, start with [QUICKSTART.md](./QUICKSTART.md).
+First implement the required [builder-operated backend](./BACKEND_INTEGRATION.md).
+This package does not include a server, and the integration does not use PEX's
+hosted backend API.
 
 ## 1. Create the client
 
@@ -9,15 +12,18 @@ For a continuous example, start with [QUICKSTART.md](./QUICKSTART.md).
 import { createPdexApiClient } from "@pdex/sdk/api";
 
 const pdex = createPdexApiClient({
-  baseUrl: import.meta.env.VITE_PDEX_BACKEND_URL,
+  baseUrl: import.meta.env.VITE_BUILDER_API_URL,
   publicArtifactBaseUrl: import.meta.env.VITE_PDEX_ARTIFACT_URL,
-  network: "testnet",
+  network: "mainnet",
   accountSessionToken: () => currentAccountToken,
 });
 ```
 
-`publicArtifactBaseUrl` enables cache-friendly latest-price and signed-oracle
-reads with automatic backend fallback.
+Use the MainNet artifact URL and builder-owned API/node settings in
+[Configuration](./BACKEND_INTEGRATION.md#configuration).
+`publicArtifactBaseUrl` enables latest-price and signed-oracle bundle reads.
+Oracle payload reads can fall back to your configured backend; latest-price
+artifact errors fail the read. No fallback selects a PEX-operated backend.
 
 ## 2. Load protocol resources
 

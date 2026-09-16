@@ -2,6 +2,9 @@
 
 The PDex TypeScript SDK supports external applications that read protocol data,
 calculate quotes, inspect state, and prepare wallet-signed PDex V2 transactions.
+API methods target a compatible backend operated by the builder. A standalone
+server is not included. See [BACKEND_INTEGRATION.md](./BACKEND_INTEGRATION.md).
+Use is governed by the [PEX Builder License 1.0](./LICENSE).
 
 ## Package modules
 

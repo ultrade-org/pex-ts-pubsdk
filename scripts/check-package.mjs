@@ -31,6 +31,8 @@ const expectedSourceFiles = [
 
 const expectedTopLevelEntries = [
   ".gitignore",
+  "BACKEND_INTEGRATION.md",
+  "LICENSE",
   "INTEGRATION_GUIDE.md",
   "PUBLIC_API.md",
   "QUICKSTART.md",
@@ -87,6 +89,8 @@ const expectedFixtureFiles = [
 ];
 
 const expectedPackageFiles = [
+  "BACKEND_INTEGRATION.md",
+  "LICENSE",
   "INTEGRATION_GUIDE.md",
   "PUBLIC_API.md",
   "QUICKSTART.md",
@@ -333,6 +337,9 @@ requireExact("fixture file set", readdirSync(resolve(root, "test/fixtures")), ex
 
 const packageJson = JSON.parse(read("package.json"));
 const packageLock = JSON.parse(read("package-lock.json"));
+if (packageJson.license !== "SEE LICENSE IN LICENSE" || packageLock.packages?.[""]?.license !== packageJson.license) {
+  failures.push("package and lockfile must refer to the distributed LICENSE");
+}
 requireExact("package file set", packageJson.files ?? [], expectedPackageFiles);
 requireExact("package export set", Object.keys(packageJson.exports ?? {}), expectedPackageExports);
 
@@ -392,7 +399,7 @@ function repositoryTextFiles(directory = ".") {
       if (![".git", "dist", "node_modules"].includes(entry.name)) files.push(...repositoryTextFiles(path));
       continue;
     }
-    if (/\.(?:json|md|mjs|ts)$/.test(entry.name) && path !== "package-lock.json") files.push(path);
+    if ((path === "LICENSE" || /\.(?:json|md|mjs|ts)$/.test(entry.name)) && path !== "package-lock.json") files.push(path);
   }
   return files;
 }

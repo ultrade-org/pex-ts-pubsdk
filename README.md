@@ -3,6 +3,18 @@
 Browser-first TypeScript tools for building trading, liquidity, analytics, and
 wallet experiences on PDex V2.
 
+**Bring your own backend and node.** This is a frontend SDK, not a standalone
+backend. Builders provide the compatible data API and chain infrastructure;
+PEX provides the published R2 oracle/price feed. Do not use or proxy a
+PEX-operated backend API. See [backend integration](./BACKEND_INTEGRATION.md)
+for the required services and current limitations.
+
+**License:** [PEX Builder License 1.0](./LICENSE), a source-available license.
+Commercial, independently branded products and self-hosted infrastructure on
+official PEX deployments are permitted. Using this code or its derivatives
+for a separate competing protocol is not. Your separate application code can
+remain proprietary. See the license for the complete conditions.
+
 The SDK provides:
 
 - typed access to PDex protocol, deployment, market, pool, account, price,
@@ -27,7 +39,7 @@ source is pinned:
 ```bash
 git clone https://github.com/ultrade-org/pex-ts-pubsdk.git
 cd pex-ts-pubsdk
-git checkout <reviewed-commit-or-tag>
+git checkout v0.3.2
 npm ci --ignore-scripts
 npm run build
 npm pack --ignore-scripts
@@ -40,10 +52,11 @@ your application while continuing to suppress dependency lifecycle scripts:
 npm install --save-exact /path/to/pdex-sdk-0.3.2.tgz --ignore-scripts
 ```
 
-## Updating to 0.3.1
+## Updating to 0.3.2
 
-Builders using 0.2.x or 0.3.0 should upgrade and rebuild their application.
-Version 0.3.1 corrects position health, admission, funding and borrowing
+Builders using an earlier version should upgrade and rebuild their application.
+Version 0.3.2 adds single-token funding and native-ALGO backing corrections.
+It includes the 0.3.1 corrections to position health, admission, funding and borrowing
 breakdowns, unsigned previews for rekeyed accounts, and composition of groups
 containing repeated Math helper calls. It also exports `quoteV2LiquidationPrice`.
 
@@ -66,9 +79,9 @@ public context in one call:
 import { loadPdexContext } from "@pdex/sdk/integration";
 
 const pdex = await loadPdexContext({
-  baseUrl: "https://api.example",
-  publicArtifactBaseUrl: "https://artifacts.example",
-  network: "testnet",
+  baseUrl: import.meta.env.VITE_BUILDER_API_URL, // Your compatible backend.
+  publicArtifactBaseUrl: "https://pub-1e72beea87f04ebfafce248132310425.r2.dev/mainnet",
+  network: "mainnet",
 });
 
 const market = pdex.markets[0];
@@ -93,14 +106,15 @@ import {
 } from "@pdex/sdk";
 
 const pdex = createPdexApiClient({
-  baseUrl: "https://api.example",
-  network: "testnet",
+  baseUrl: import.meta.env.VITE_BUILDER_API_URL,
+  publicArtifactBaseUrl: "https://pub-1e72beea87f04ebfafce248132310425.r2.dev/mainnet",
+  network: "mainnet",
 });
 
 await pdex.loadProtocol();
 
 const [deployment, bootstrap, resources] = await Promise.all([
-  pdex.deployment("testnet"),
+  pdex.deployment("mainnet"),
   pdex.v2SdkBootstrap(),
   pdex.v2SdkResources(),
 ]);
@@ -156,7 +170,7 @@ const quote = quoteV2OpenPosition({
 if (!quote.ok) throw new Error(String(quote.failure_reasons));
 ```
 
-Backend quote methods provide an independent server calculation for trading,
+Backend quote methods call your compatible server for trading,
 margin, liquidity, swaps, orders, CVA, and liquidation workflows.
 
 ## Build a transaction group
@@ -239,7 +253,3 @@ npm run check:package
 npm test
 npm pack --dry-run --ignore-scripts --json
 ```
-
-### 0.3.2 quote corrections
-
-Single-token quotes read funding from the contract's long collateral slot for both position sides. Native ALGO (asset ID zero) is accepted as single-token backing. This patch changes local quote calculations; integrations keep their existing API and transaction interfaces.

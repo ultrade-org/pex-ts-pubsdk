@@ -1,11 +1,14 @@
 {
   "name": "@pdex/sdk",
   "version": "0.3.2",
+  "license": "SEE LICENSE IN LICENSE",
   "description": "Public TypeScript SDK for integrating with the PDex V2 protocol",
   "type": "module",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
   "files": [
+    "LICENSE",
+    "BACKEND_INTEGRATION.md",
     "dist/src",
     "INTEGRATION_GUIDE.md",
     "PUBLIC_API.md",
