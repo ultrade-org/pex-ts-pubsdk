@@ -196,6 +196,9 @@ test("signed oracle payload falls back to the backend when the public artifact t
   assert.equal(requests.length, 2);
   assert.equal(requests[0], "https://cdn.example/testnet/v2/oracle-payloads/testnet/current.json");
   assert.match(requests[1], /^https:\/\/pdex\.example\/v2\/oracle\/7\?/);
+  assert.deepEqual([...new URL(requests[1]).searchParams.keys()].sort(), [
+    "app_id", "oracle_message_version", "price_scale", "target",
+  ]);
 });
 
 test("oracle API rejects numeric raw prices in a versioned backend response", async () => {

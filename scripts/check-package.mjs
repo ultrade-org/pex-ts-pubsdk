@@ -61,6 +61,7 @@ const expectedTestFiles = [
   "integration.test.ts",
   "lp-swap-recall.test.ts",
   "margin-adjustment.test.ts",
+  "oracle-consumption.test.ts",
   "position-token-precision.test.ts",
   "position-resolution-simulation.test.ts",
   "public-capabilities.test.ts",
@@ -84,6 +85,7 @@ const expectedFixtureFiles = [
   "v2-lp-nav-v2.json",
   "v2-oracle-message-v3.json",
   "v2-oracle-position-precision-v1.json",
+  "v2-oracle-received-payload.json",
   "v2-transaction-materialization-v1.json",
   "v2_adl_pnl_cap_vectors.json",
 ];
@@ -391,6 +393,18 @@ const transactionFunctions = [...transactions.matchAll(/^export\s+(?:async\s+)?f
   .map((match) => match[1]);
 requireExact("transaction function set", transactionFunctions, expectedTransactionFunctions);
 
+const oracle = read("src/oracle.ts");
+const oracleFunctions = [...oracle.matchAll(/^export\s+(?:async\s+)?function\s+([A-Za-z][A-Za-z0-9_]*)\b/gm)]
+  .map((match) => match[1]);
+requireExact("oracle consumer function set", oracleFunctions, [
+  "decodeV2OracleSnapshotMessage",
+  "formatPrice12",
+  "oraclePayloadFromBackend",
+  "parsePrice12",
+  "validateRawPrice12",
+  "verifyOraclePayload",
+]);
+
 function repositoryTextFiles(directory = ".") {
   const files = [];
   for (const entry of readdirSync(resolve(root, directory), { withFileTypes: true })) {
@@ -418,6 +432,9 @@ for (const path of repositoryTextFiles()) {
 }
 
 const disclosurePatterns = [
+  /\b(?:encode|sign)[A-Za-z0-9_]*Oracle[A-Za-z0-9_]*\b/,
+  /\bed25519\s*\.\s*(?:sign(?:Async)?|getPublicKey(?:Async)?)\s*\(/,
+  /\bseed_hex\b/,
   /(?:^|\W)(?:TODO|FIXME|HACK|XXX)(?:\W|$)/,
   /\b(?:internal|confidential)\s+(?:discussion|document|note|roadmap|use)\b/i,
   /\b(?:private sdk|private repository|private checkout)\b/i,

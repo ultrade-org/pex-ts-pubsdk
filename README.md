@@ -39,20 +39,27 @@ source is pinned:
 ```bash
 git clone https://github.com/ultrade-org/pex-ts-pubsdk.git
 cd pex-ts-pubsdk
-git checkout v0.3.2
+git checkout v0.4.0
 npm ci --ignore-scripts
 npm run build
 npm pack --ignore-scripts
 ```
 
-The final command creates `pdex-sdk-0.3.2.tgz`. Install that exact tarball in
+The final command creates `pdex-sdk-0.4.0.tgz`. Install that exact tarball in
 your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm install --save-exact /path/to/pdex-sdk-0.3.2.tgz --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.4.0.tgz --ignore-scripts
 ```
 
-## Updating to 0.3.2
+## Updating to 0.4.0
+
+Oracle support consumes published signed payloads: fetch, decode, verify, and
+pass the received bytes to transaction builders. Oracle requests select the
+application and market or asset; they do not accept custom prices or timestamps.
+Fetch with `v2OracleArgs()` and use its returned message and signature unchanged.
+
+## Corrections included from 0.3.2
 
 Builders using an earlier version should upgrade and rebuild their application.
 Version 0.3.2 adds single-token funding and native-ALGO backing corrections.

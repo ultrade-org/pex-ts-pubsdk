@@ -6,6 +6,9 @@ API methods target a compatible backend operated by the builder. A standalone
 server is not included. See [BACKEND_INTEGRATION.md](./BACKEND_INTEGRATION.md).
 Use is governed by the [PEX Builder License 1.0](./LICENSE).
 
+Oracle support consumes published payloads only. Fetch existing signed data,
+decode or verify it, and pass its bytes unchanged to transaction builders.
+
 ## Package modules
 
 | Module | Capability |

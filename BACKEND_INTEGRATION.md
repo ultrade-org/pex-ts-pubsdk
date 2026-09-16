@@ -6,7 +6,7 @@ by their product. Do not point `baseUrl` at a PEX-operated API or implement your
 backend by proxying that API. The externally supplied PEX service used by this
 integration is the published R2 oracle/price feed.
 
-Version 0.3.2 does **not** include a standalone backend server or a complete
+Version 0.4.0 does **not** include a standalone backend server or a complete
 chain-indexing implementation. Configuring `baseUrl` does not create those
 services. Build the required data endpoints before following the browser
 quickstart. You can alternatively supply chain-derived inputs directly to the
