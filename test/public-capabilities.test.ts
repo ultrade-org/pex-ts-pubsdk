@@ -166,7 +166,7 @@ test("browser integration and normalized read-model helpers are exported", () =>
 });
 
 test("large-program roles cover public cross-application calls", () => {
-  assert.deepEqual(sdk.v2LargeProgramRoles("PDexV2OrderOps", "submit_order"), ["markets", "trading"]);
+  assert.deepEqual(sdk.v2LargeProgramRoles("PDexV2OrderOps", "submit_order"), ["markets", "trading", "order_ops"]);
   assert.deepEqual(sdk.v2LargeProgramRoles("PDexV2CvaVault", "mark_market"), ["markets", "cva_vault"]);
   assert.deepEqual(sdk.v2LargeProgramRoles("PDexV2MarketYieldVault", "folks_mark_market_strategy"), ["markets"]);
   assert.deepEqual(sdk.v2LargeProgramRoles("PDexV2AdminOps", "deposit_liquidity"), ["markets"]);

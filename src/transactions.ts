@@ -315,12 +315,14 @@ export interface AppCallDescriptor {
   largeProgramRoles?: V2LargeProgramRole[];
 }
 
-export type V2LargeProgramRole = "markets" | "cva_vault" | "trading";
+export type V2LargeProgramRole = "markets" | "cva_vault" | "trading" | "single_token_trading" | "order_ops";
 
 export const V2_LARGE_PROGRAM_READ_BUDGET_REFS: Readonly<Record<V2LargeProgramRole, number>> = {
   markets: 3,
   cva_vault: 2,
   trading: 1,
+  single_token_trading: 1,
+  order_ops: 1,
 };
 
 const V2_MARKETS_CALLER_METHODS: Readonly<Record<string, ReadonlySet<string>>> = {
@@ -531,6 +533,8 @@ export interface V2DecreaseOrCloseInput extends PdexV2AppRefs, SenderInput, V2Ma
   marketYieldRecallCount?: BigNumberish;
   flatFeeMicroAlgo?: BigNumberish;
   builderFee?: BuilderFeeInput;
+  /** Bind a direct close to a lifetime; omit only for an ordinary manual close. */
+  expectedPositionId?: BigNumberish;
 }
 
 export interface V2DecreaseOrCloseWithSwapInput
@@ -577,6 +581,10 @@ export interface PdexV2OrderOpsRefs extends PdexV2AppRefs {
 }
 
 export interface V2SubmitOrderInput extends PdexV2OrderOpsRefs, SenderInput, PositionSideInput, OracleCallArgs {
+  /** Required for protection on an existing position, including verified legacy ID zero. */
+  expectedPositionId?: BigNumberish;
+  /** Distance back from this submission to its entry app call in the same group. */
+  entryGroupOffset?: BigNumberish;
   marketYieldRegistry?: Record<string, unknown>;
   backingAssetId?: BigNumberish;
   longAssetId?: BigNumberish;
@@ -628,6 +636,8 @@ export interface V2AttachedOrderLegInput {
 }
 
 export interface V2MarketOpenWithAttachedOrdersInput extends V2OpenOrIncreaseGroupInput, PdexV2OrderOpsRefs {
+  /** Required by the active-only attachment builder; entry builders bind their actual result. */
+  expectedPositionId?: BigNumberish;
   baseOrderId: BigNumberish;
   targetKind?: BigNumberish;
   backingAssetId?: BigNumberish;
@@ -651,6 +661,9 @@ export interface V2OpenLimitWithAttachedOrdersInput extends V2SubmitOrderInput {
 }
 
 export interface V2ExecuteOrderInput extends PdexV2OrderOpsRefs, SenderInput, PositionSideInput, OracleCallArgs, V2SettlementMaintenanceOracleRefs {
+  /** Preparation only. The contract independently verifies eligibility and never trusts this hint. */
+  cleanup?: "orphan" | "legacy";
+  keeperFeeAssetId?: BigNumberish;
   owner: AddressLike;
   ownerOrderId: BigNumberish;
   orderKind?: BigNumberish;
@@ -829,6 +842,8 @@ export interface V2SingleTokenDecreaseOrCloseInput extends PdexV2SingleTokenTrad
   maxBackingReceiptAmount?: BigNumberish;
   marketYieldRecallCount?: BigNumberish;
   flatFeeMicroAlgo?: BigNumberish;
+  /** Bind a direct close to a lifetime; omit only for an ordinary manual close. */
+  expectedPositionId?: BigNumberish;
 }
 
 export interface V2SingleTokenWithdrawPositionMarginInput
@@ -1385,6 +1400,14 @@ export function buildV2AddPositionMarginCall(input: V2AddPositionMarginInput): A
   };
 }
 
+function expectedClosePositionId(value: BigNumberish | undefined): bigint {
+  if (value === undefined) return (1n << 64n) - 1n;
+  if (typeof value === "string" && !/^\d+$/.test(value)) throw new Error("invalid expected position ID");
+  const id = strictBigInt(value, "expected position ID");
+  if (id < 0n || id >= 1n << 48n) throw new Error("invalid expected position ID");
+  return id;
+}
+
 export function buildV2DecreaseOrCloseCall(input: V2DecreaseOrCloseInput): AppCallDescriptor {
   validateRawPrice12(input.acceptablePrice as RawPrice12);
   const [builderAddress, builderFeeBps] = normalizeBuilderFee(
@@ -1421,6 +1444,7 @@ export function buildV2DecreaseOrCloseCall(input: V2DecreaseOrCloseInput): AppCa
         yieldRecallMode,
         maxLongReceiptAmount,
         maxShortReceiptAmount,
+        expectedClosePositionId(input.expectedPositionId),
       ],
       boxes: v2TradingLocalBoxes(input, input.sender),
       foreignApps: v2TradingForeignApps(input, { includeRiskOps: true }),
@@ -1535,6 +1559,7 @@ export function buildV2WithdrawPositionMarginCall(input: V2WithdrawPositionMargi
         yieldRecallMode,
         maxLongReceiptAmount,
         maxShortReceiptAmount,
+        expectedClosePositionId(input.expectedPositionId),
       ],
       boxes: [
         ...v2TradingLocalBoxes(input, input.sender),
@@ -1787,7 +1812,11 @@ function v2OrderExecuteLinkedBoxRefs(input: {
   if (linkMode === V2_ORDER_LINK_MODE.BRACKET_PARENT) {
     if (orderKind !== V2_ORDER_KIND.OPEN_LIMIT) throw new Error("bad parent kind");
     if (ownerOrderId !== linkBaseOrderId) throw new Error("bad parent id");
-    return [];
+    const orderOpsAppId = v2OrderOpsAppId(input);
+    return [
+      [orderOpsAppId, v2OrderBoxKey(input.owner, linkBaseOrderId + 1n)],
+      [orderOpsAppId, v2OrderBoxKey(input.owner, linkBaseOrderId + 2n)],
+    ];
   }
   if (linkMode !== V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT && linkMode !== V2_ORDER_LINK_MODE.CHILD_ACTIVE) {
     throw new Error("bad link mode");
@@ -1914,7 +1943,33 @@ function buildV2LinkedOrderMarketResourceCarrierCalls(
     : [marketCarrier, orderCarrier];
 }
 
+function v2OrderSubmissionBinding(
+  input: V2SubmitOrderInput & { linkMode?: BigNumberish },
+): [bigint, bigint] {
+  const rawId = input.expectedPositionId;
+  if (typeof rawId === "string" && !/^\d+$/.test(rawId)) throw new Error("invalid expected position ID");
+  const expected = rawId === undefined ? 0n : strictBigInt(rawId, "expected position ID");
+  const offset = bigint(input.entryGroupOffset ?? 0);
+  if (expected < 0n || expected >= 1n << 48n) throw new Error("position id out of range");
+  if (offset < 0n || offset > 15n) throw new Error("entry group offset out of range");
+  const unbound = Number(input.orderKind) === V2_ORDER_KIND.OPEN_LIMIT
+    || Number(input.linkMode ?? 0) === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT;
+  if (unbound) {
+    if (expected !== 0n || offset !== 0n) throw new Error("unexpected position binding");
+  } else if (offset > 0n) {
+    if (expected !== 0n) throw new Error("unexpected expected position id");
+  } else if (input.expectedPositionId === undefined) {
+    throw new Error("expectedPositionId is required for an existing position");
+  }
+  return [expected, offset];
+}
+
+function v2OrderTradingRoles(targetKind: number): V2LargeProgramRole[] {
+  return ["order_ops", "markets", targetKind === V2_ORDER_TARGET.SINGLE_TOKEN ? "single_token_trading" : "trading"];
+}
+
 export function buildV2SubmitOrderCall(input: V2SubmitOrderInput): AppCallDescriptor {
+  const binding = v2OrderSubmissionBinding(input);
   const targetKind = Number(input.targetKind);
   const [builderAddress, builderFeeBps] = normalizeBuilderFee(
     input.builderFee,
@@ -1953,6 +2008,7 @@ export function buildV2SubmitOrderCall(input: V2SubmitOrderInput): AppCallDescri
       input.minSecondaryOutputAmount ?? 0,
       input.timeInForce,
       input.expiryTime ?? 0,
+      ...binding,
       [builderAddress, builderFeeBps],
       input.oracleMessage,
       input.oracleSignature,
@@ -1975,6 +2031,7 @@ export function buildV2SubmitOrderCall(input: V2SubmitOrderInput): AppCallDescri
     manifest: input.manifest ?? loadManifest(undefined, 2),
   }) as AppCallDescriptor & { abiTransactionArgs?: string[] };
   call.abiTransactionArgs = ["escrow_transfer", "storage_payment"];
+  call.largeProgramRoles = v2OrderTradingRoles(targetKind);
   call.resourceCarrier = resourceCarrier;
   call.resourceCarriers = [
     ...yieldFreshnessCarriers,
@@ -2009,6 +2066,7 @@ function assertV2DecreaseOrderMarketAssets(
 }
 
 export function buildV2SubmitLinkedOrderCall(input: V2SubmitLinkedOrderInput): AppCallDescriptor {
+  const binding = v2OrderSubmissionBinding(input);
   const targetKind = Number(input.targetKind);
   const [builderAddress, builderFeeBps] = normalizeBuilderFee(
     input.builderFee,
@@ -2051,7 +2109,11 @@ export function buildV2SubmitLinkedOrderCall(input: V2SubmitLinkedOrderInput): A
           input.side,
         )] as [number, Uint8Array],
       ]
-    : [];
+    : Number(input.linkMode) === V2_ORDER_LINK_MODE.CHILD_ACTIVE
+      ? [[targetTradingAppId, v2PositionBoxKey(
+          input.sender, input.marketId, input.collateralAssetId, input.side,
+        )] as [number, Uint8Array]]
+      : [];
   const call = buildAppCall({
     appId: v2OrderOpsAppId(input),
     appName: "PDexV2OrderOps",
@@ -2077,6 +2139,7 @@ export function buildV2SubmitLinkedOrderCall(input: V2SubmitLinkedOrderInput): A
       input.expiryTime ?? 0,
       input.linkMode,
       input.linkBaseOrderId,
+      ...binding,
       [builderAddress, builderFeeBps],
       input.oracleMessage,
       input.oracleSignature,
@@ -2092,6 +2155,9 @@ export function buildV2SubmitLinkedOrderCall(input: V2SubmitLinkedOrderInput): A
     manifest: input.manifest ?? loadManifest(undefined, 2),
   }) as AppCallDescriptor & { abiTransactionArgs?: string[] };
   call.abiTransactionArgs = ["escrow_transfer", "storage_payment"];
+  call.largeProgramRoles = Number(input.linkMode) === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT
+    ? ["order_ops", "markets"]
+    : v2OrderTradingRoles(targetKind);
   call.resourceCarriers = [
     ...yieldFreshnessCarriers,
     ...(executionResourceCarrier ? [executionResourceCarrier] : []),
@@ -2101,6 +2167,7 @@ export function buildV2SubmitLinkedOrderCall(input: V2SubmitLinkedOrderInput): A
 }
 
 export function buildV2ExecuteOrderCall(input: V2ExecuteOrderInput): AppCallDescriptor {
+  if (input.cleanup !== undefined) return buildV2OrderCleanupCall(input);
   const targetKind = Number(input.v2SingleTokenTradingAppId ?? 0) > 0
     && Number(input.targetTradingAppId) === Number(input.v2SingleTokenTradingAppId)
     ? V2_ORDER_TARGET.SINGLE_TOKEN
@@ -2200,12 +2267,19 @@ export function buildV2ExecuteOrderCall(input: V2ExecuteOrderInput): AppCallDesc
       linkBaseOrderId: input.linkBaseOrderId,
     }),
   );
+  if (executionResourceCarrier && executionResourceCarrier.boxes.length + executionResourceCarrier.foreignApps.length
+    + executionResourceCarrier.foreignAssets.length + executionResourceCarrier.accounts.length > 8) {
+    // Parent activation adds two child boxes. Share the owner account already
+    // provided by the primary execution call.
+    executionResourceCarrier.accounts = executionResourceCarrier.accounts.filter((account) => account !== addressString(input.owner));
+  }
   const settlementMaintenanceCalls = buildV2SettlementMaintenanceCalls(
     input as unknown as V2SettlementMaintenanceOracleRefs & SenderInput & PdexV2AppRefs & PdexV2SingleTokenOpsRefs & V2MarketAssetRefs & { marketId: BigNumberish; backingAssetId?: BigNumberish },
     { singleToken: targetKind === V2_ORDER_TARGET.SINGLE_TOKEN },
   );
   return {
     ...withFee,
+    largeProgramRoles: v2OrderTradingRoles(targetKind),
     resourceCarrier,
     ...(
       (withFee.resourceCarriers?.length ?? 0) || yieldFreshnessCarriers.length || executionResourceCarrier
@@ -2220,6 +2294,49 @@ export function buildV2ExecuteOrderCall(input: V2ExecuteOrderInput): AppCallDesc
     ),
     ...(settlementMaintenanceCalls.length ? { settlementMaintenanceCalls } : {}),
   };
+}
+
+function buildV2OrderCleanupCall(input: V2ExecuteOrderInput): AppCallDescriptor {
+  if (input.cleanup !== "orphan" && input.cleanup !== "legacy") throw new Error("bad order cleanup kind");
+  const orderKind = Number(input.orderKind);
+  const linkMode = Number(input.linkMode ?? V2_ORDER_LINK_MODE.STANDALONE);
+  // Validate linkage even when the target-only cleanup does not need its sibling.
+  const linkedBoxes = v2OrderExecuteLinkedBoxRefs({
+    owner: input.owner, ownerOrderId: input.ownerOrderId, orderKind,
+    v2OrderOpsAppId: input.v2OrderOpsAppId, linkMode: input.linkMode, linkBaseOrderId: input.linkBaseOrderId,
+  });
+  const isParent = linkMode === V2_ORDER_LINK_MODE.BRACKET_PARENT;
+  if (input.cleanup === "orphan" && (orderKind === V2_ORDER_KIND.OPEN_LIMIT || linkMode === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT)) {
+    throw new Error("only active TP/SL can be orphan cleanup candidates");
+  }
+  if (input.cleanup === "legacy" && orderKind === V2_ORDER_KIND.OPEN_LIMIT && !isParent) {
+    throw new Error("standalone legacy entries remain executable");
+  }
+  const roles: V2LargeProgramRole[] = ["order_ops"];
+  const boxes: Array<Uint8Array | [number, Uint8Array]> = [v2OrderBoxKey(input.owner, input.ownerOrderId)];
+  const foreignApps = [v2AdminControlAppId(input)];
+  if (input.cleanup === "orphan") {
+    boxes.push([input.targetTradingAppId, v2PositionBoxKey(input.owner, input.marketId, input.collateralAssetId, input.side)]);
+    foreignApps.push(input.targetTradingAppId);
+    roles.push(input.targetTradingAppId === input.v2SingleTokenTradingAppId ? "single_token_trading" : "trading");
+  } else if (isParent) {
+    boxes.push(...linkedBoxes);
+  } else if (linkMode === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT) {
+    boxes.push([v2OrderOpsAppId(input), v2OrderBoxKey(input.owner, input.linkBaseOrderId!)]);
+  }
+  const call = buildAppCall({
+    appId: v2OrderOpsAppId(input), appName: "PDexV2OrderOps", methodName: "execute_order",
+    sender: input.sender,
+    args: [input.owner, input.ownerOrderId, new Uint8Array(), new Uint8Array(), 0, 0, 0],
+    boxes, foreignApps,
+    foreignAssets: uniqueNumbers([input.collateralAssetId, input.keeperFeeAssetId ?? input.collateralAssetId]),
+    accounts: [input.owner],
+    flatFeeMicroAlgo: input.flatFeeMicroAlgo ?? 20_000n,
+    manifest: input.manifest ?? loadManifest(undefined, 2),
+  });
+  call.largeProgramRoles = roles;
+  // Reuse the existing Math carrier only when the primary cannot hold its budget.
+  return fundV2LargeProgramBudgetAcrossCalls(call, [], roles, input.v2MathAppId, input.sender, input.manifest);
 }
 
 export function buildV2CancelOrderCall(input: V2CancelOrderInput): AppCallDescriptor {
@@ -3102,6 +3219,7 @@ export function buildV2SingleTokenDecreaseOrCloseCall(input: V2SingleTokenDecrea
         input.oracleSignature,
         yieldRecallMode,
         maxBackingReceiptAmount,
+        expectedClosePositionId(input.expectedPositionId),
       ],
       boxes: v2SingleTokenTradingLocalBoxes(input, input.sender),
       foreignApps: v2SingleTokenTradingForeignApps(input, { includeRiskOps: true }),
@@ -3162,6 +3280,7 @@ export function buildV2SingleTokenWithdrawPositionMarginCall(input: V2SingleToke
         input.oracleSignature,
         yieldRecallMode,
         maxBackingReceiptAmount,
+        expectedClosePositionId(input.expectedPositionId),
       ],
       boxes: [
         ...v2SingleTokenTradingLocalBoxes(input, input.sender),
@@ -3577,6 +3696,7 @@ export function buildV2MarketOpenWithAttachedOrdersTransactions(
     targetKind,
     suggestedParams,
     sharedCarrierOrderIds,
+    entryTransactionIndex: openGroup.primaryIndex,
   })) {
     sharedCarrierOrderIds = [];
   }
@@ -3587,6 +3707,7 @@ export function buildV2MarketOpenWithAttachedOrdersTransactions(
     targetKind,
     suggestedParams,
     sharedCarrierOrderIds,
+    entryTransactionIndex: openGroup.primaryIndex,
   });
   validateGroupTransactionCount(transactions);
   return grouped(transactions, openGroup.primaryIndex, openGroup.primaryAppName);
@@ -3656,6 +3777,7 @@ export function buildV2OpenLimitWithAttachedOrdersTransactions(
     targetKind,
     suggestedParams,
     sharedCarrierOrderIds: [],
+    entryTransactionIndex: childLinkMode === V2_ORDER_LINK_MODE.CHILD_ACTIVE ? 2 : undefined,
   });
   appendAttachedOrderLegTransactions(transactions, input, input.stopLoss, {
     baseOrderId,
@@ -3664,6 +3786,7 @@ export function buildV2OpenLimitWithAttachedOrdersTransactions(
     targetKind,
     suggestedParams,
     sharedCarrierOrderIds: [],
+    entryTransactionIndex: childLinkMode === V2_ORDER_LINK_MODE.CHILD_ACTIVE ? 2 : undefined,
   });
   validateGroupTransactionCount(transactions);
   return grouped(transactions, 2, "PDexV2OrderOps");
@@ -3678,7 +3801,7 @@ export function buildV2ExecuteOrderTransactions(
   return grouped([
     ...maintenance,
     toApplicationNoOpTxn(appCall, suggestedParams),
-    toApplicationNoOpTxn(requireResourceCarrier(appCall), suggestedParams),
+    ...(appCall.resourceCarrier ? [toApplicationNoOpTxn(appCall.resourceCarrier, suggestedParams)] : []),
     ...(appCall.resourceCarriers ?? []).map((carrier) => toApplicationNoOpTxn(carrier, suggestedParams)),
   ], maintenance.length, appCall.appName);
 }
@@ -5745,6 +5868,8 @@ export function v2LargeProgramRoles(
   ) {
     roles.push("trading");
   }
+  if (appName === "PDexV2SingleTokenTrading") roles.push("single_token_trading");
+  if (appName === "PDexV2OrderOps") roles.push("order_ops");
   return roles;
 }
 
@@ -6321,12 +6446,19 @@ function appendAttachedOrderLegTransactions(
     targetKind: number;
     suggestedParams: SuggestedParams;
     sharedCarrierOrderIds: BigNumberish[];
+    entryTransactionIndex?: number;
   },
 ): boolean {
   if (!leg) return false;
   transactions.push(
     ...buildV2SubmitLinkedOrderTransactionParts(
-      v2AttachedChildInput(parent, leg, options),
+      {
+        ...v2AttachedChildInput(parent, leg, options),
+        ...(options.entryTransactionIndex === undefined ? {} : {
+          expectedPositionId: 0n,
+          entryGroupOffset: transactions.length + 2 - options.entryTransactionIndex,
+        }),
+      },
       options.suggestedParams,
       false,
       options.sharedCarrierOrderIds,
@@ -6380,6 +6512,8 @@ function v2AttachedChildInput(
     expiryTime: leg.expiryTime ?? (rawParent.childExpiryTime as BigNumberish) ?? 0,
     linkMode: options.linkMode,
     linkBaseOrderId: options.baseOrderId,
+    expectedPositionId: Number(options.linkMode) === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT ? 0n : parent.expectedPositionId,
+    entryGroupOffset: 0,
     oracleMessage: leg.oracleMessage ?? parent.oracleMessage,
     oracleSignature: leg.oracleSignature ?? parent.oracleSignature,
     storagePaymentMicroAlgo: leg.storagePaymentMicroAlgo ?? (rawParent.childStoragePaymentMicroAlgo as BigNumberish) ?? V2_ORDER_BOX_MBR_MICRO_ALGO,

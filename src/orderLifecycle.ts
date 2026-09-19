@@ -16,6 +16,9 @@ export type AddressLike = string | Uint8Array;
 export type V2OrderCategory = "Open Limit" | "Take Profit" | "Stop Loss" | "Unknown";
 export type V2OrderStaleReason =
   | "position_missing"
+  | "position_replaced"
+  | "legacy_retired"
+  | "parent_pending"
   | "reduce_size_exceeds_position"
   | "pending_tp_total_exceeds_position"
   | "pending_sl_total_exceeds_position"
@@ -56,6 +59,8 @@ export interface V2OrderLifecycleState {
   position?: V2StatePosition;
   positionKey: V2OrderPositionKey;
   positionExists: boolean;
+  positionMatches: boolean;
+  cleanupReason: "" | "position_missing" | "position_replaced" | "legacy_retired";
   positionSizeUsd: bigint;
   orderCategory: V2OrderCategory;
   isReduceOrder: boolean;
@@ -170,7 +175,23 @@ export function analyzeV2OrderLifecycle(
   const parentExists = isBracketChild && orders.some(
     (candidate) => orderOwnerId(candidate) === linkBaseOrderId && v2OrderKeyFromOrder(candidate).key === key.key,
   );
-  const parentPending = linkMode === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT && parentExists;
+  const schemaVersion = Number(get(mergedOrder, "schema_version", "schemaVersion")) || (options.hypothetical ? 4 : 0);
+  const legacyRetired = schemaVersion === 3 && (isReduceOrder || isBracketParent);
+  // V4 children become active only through an explicit on-chain binding.
+  const parentPending = linkMode === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT && (schemaVersion !== 3 || parentExists);
+  const currentId = position ? positionIdentity(position) : undefined;
+  // An unsigned new intent may use the supplied current state. Stored/signed orders never rebind.
+  if (options.hypothetical && mergedOrder.position_id === undefined && mergedOrder.positionId === undefined && currentId !== undefined) {
+    mergedOrder.position_id = currentId;
+  }
+  const boundId = positionIdentity(mergedOrder);
+  const positionMatches = schemaVersion === 4 && !parentPending && boundId !== undefined && currentId !== undefined && boundId === currentId;
+  let cleanupReason: V2OrderLifecycleState["cleanupReason"] = "";
+  if (legacyRetired && !parentPending) cleanupReason = "legacy_retired";
+  else if (schemaVersion === 4 && isReduceOrder && !parentPending && boundId !== undefined) {
+    if (!position) cleanupReason = "position_missing";
+    else if (currentId !== undefined && currentId !== boundId) cleanupReason = "position_replaced";
+  }
   const bracketStatus = bracketStatusFor(linkMode, parentPending);
   const expired = orderExpired(mergedOrder);
   const crossed = orderCrossed(mergedOrder);
@@ -180,6 +201,7 @@ export function analyzeV2OrderLifecycle(
     collateralAssetId: key.collateralAssetId,
     side: key.side,
     orders,
+    positionId: currentId,
     excludeOwnerOrderId: options.excludeOwnerOrderId ?? (options.hypothetical ? ownerOrderId : undefined),
     additionalOrder: options.hypothetical && isReduceOrder ? mergedOrder : undefined,
   });
@@ -202,16 +224,30 @@ export function analyzeV2OrderLifecycle(
   if (priceFailure) blockers.push(priceFailure);
   if (expired) blockers.push("order_expired");
   if (!crossed) blockers.push("not_crossed");
-  if (isReduceOrder) {
-    if (!position) {
+  if (parentPending) blockers.push("parent_pending");
+  if (legacyRetired) {
+    blockers.push("legacy_retired");
+    staleReason = "legacy_retired";
+  }
+  if (isReduceOrder && !parentPending && !legacyRetired) {
+    if (options.hypothetical && !position) {
       blockers.push("position_missing");
       staleReason = "position_missing";
+    } else if (schemaVersion !== 4 || boundId === undefined || (position && currentId === undefined)) {
+      blockers.push("unknown_position_state");
+      staleReason = "unknown_position_state";
+    } else if (!position) {
+      blockers.push("position_missing");
+      staleReason = "position_missing";
+    } else if (!positionMatches) {
+      blockers.push("position_replaced");
+      staleReason = "position_replaced";
     } else if (bigint(get(mergedOrder, "size_usd_delta", "sizeUsdDelta")) > positionSizeUsd) {
       blockers.push("reduce_size_exceeds_position");
       staleReason = "reduce_size_exceeds_position";
     }
-    if (position && pendingTotals.pendingTpSizeUsd > positionSizeUsd) warnings.push("pending_tp_total_exceeds_position");
-    if (position && pendingTotals.pendingSlSizeUsd > positionSizeUsd) warnings.push("pending_sl_total_exceeds_position");
+    if (positionMatches && pendingTotals.pendingTpSizeUsd > positionSizeUsd) warnings.push("pending_tp_total_exceeds_position");
+    if (positionMatches && pendingTotals.pendingSlSizeUsd > positionSizeUsd) warnings.push("pending_sl_total_exceeds_position");
   }
   if (isOpenLimit) {
     const minPositionSizeUsd = bigint(get(mergedOrder, "min_position_size_usd", "minPositionSizeUsd"));
@@ -235,6 +271,8 @@ export function analyzeV2OrderLifecycle(
     position,
     positionKey: key,
     positionExists: Boolean(position),
+    positionMatches,
+    cleanupReason,
     positionSizeUsd,
     orderCategory: v2OrderCategory(orderKind),
     isReduceOrder,
@@ -272,6 +310,7 @@ function pendingReduceTotals(input: {
   orders: V2StateOrder[];
   excludeOwnerOrderId?: BigNumberish;
   additionalOrder?: V2StateOrder;
+  positionId?: bigint;
 }): V2OrderPendingTotals {
   let pendingTpSizeUsd = 0n;
   let pendingSlSizeUsd = 0n;
@@ -285,6 +324,9 @@ function pendingReduceTotals(input: {
     const ownerOrderId = orderOwnerId(order);
     if (order !== input.additionalOrder && exclude !== undefined && ownerOrderId === exclude) continue;
     if (orderExpired(order)) continue;
+    if (input.positionId === undefined || positionIdentity(order) !== input.positionId) continue;
+    if (Number(get(order, "schema_version", "schemaVersion")) !== 4 && order !== input.additionalOrder) continue;
+    if (orderLinkMode(order) === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT) continue;
     const orderKind = Number(get(order, "order_kind", "orderKind"));
     const size = bigint(get(order, "size_usd_delta", "sizeUsdDelta"));
     const linkMode = orderLinkMode(order);
@@ -404,6 +446,16 @@ function currentTimeFromOrder(order: V2StateOrder): number {
   const value = order.current_time ?? order.currentTime;
   if (value !== undefined && value !== null && value !== "") return Number(bigint(value));
   return Math.floor(Date.now() / 1000);
+}
+
+function positionIdentity(record: Record<string, unknown>): bigint | undefined {
+  const value = record.position_id ?? record.positionId;
+  if (value === undefined || value === null || value === "" || typeof value === "boolean") return undefined;
+  if (typeof value === "number" && !Number.isSafeInteger(value)) return undefined;
+  try {
+    const id = BigInt(value as string | number | bigint);
+    return id >= 0n && id < (1n << 48n) ? id : undefined;
+  } catch { return undefined; }
 }
 
 function positionSize(position: V2StatePosition): bigint {

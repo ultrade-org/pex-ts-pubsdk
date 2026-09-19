@@ -240,6 +240,7 @@
       "family": "single_token",
       "market": {
         "long_asset_id": 12,
+        "long_funding_fee_per_size_with_long_collateral_milli_bps": 222,
         "position_impact_factor_bps": 0,
         "long_token_claimable_funding_per_size_for_longs": 5000000000,
         "short_token_claimable_funding_per_size_for_longs": 5000000000

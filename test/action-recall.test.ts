@@ -131,8 +131,8 @@ function configureManifest() {
   setProtocolManifest({ apps: {
     PDexV2Math: { method_specs: { noop: { ...spec("noop()void", []), returns: { type: "void" } } } },
     PDexV2Trading: { method_specs: { decrease_or_close: spec(
-      "decrease_or_close(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,(address,uint64),byte[],byte[],uint64,uint64,uint64)byte[]",
-      ["uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "(address,uint64)", "byte[]", "byte[]", "uint64", "uint64", "uint64"],
+      "decrease_or_close(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,(address,uint64),byte[],byte[],uint64,uint64,uint64,uint64)byte[]",
+      ["uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "(address,uint64)", "byte[]", "byte[]", "uint64", "uint64", "uint64", "uint64"],
     ) } },
   } }, 2);
 }
@@ -149,7 +149,7 @@ test("the standard prepared close encodes recall without caller flags; the old o
   assert.throws(() => buildV2DecreaseOrCloseTransactions(args, params), /preparation is required/);
   const group = await prepareV2DecreaseOrCloseTransactions(f.client, args, params);
   const txn = group.find(t => t.applicationCall?.appIndex === 2002n)!;
-  const encoded = txn.applicationCall!.appArgs.slice(-3).map(value => BigInt(`0x${Buffer.from(value).toString("hex")}`));
+  const encoded = txn.applicationCall!.appArgs.slice(-4, -1).map(value => BigInt(`0x${Buffer.from(value).toString("hex")}`));
   assert.deepEqual(encoded, [1n, 2000000n, 0n]);
   assert.ok(group.length > 3);
   assert.equal(new Set(group.map(t => t.txID())).size, group.length);

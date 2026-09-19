@@ -176,12 +176,18 @@ export interface V2OrderStateV3 {
   builder_fee_bps: bigint;
 }
 
+export interface V2OrderStateV4 extends V2OrderStateV3 {
+  /** Bound lifetime for active protection; waiting entries remain unbound. */
+  position_id: bigint;
+}
+export type V2DecodedOrderState = V2OrderStateV3 | V2OrderStateV4;
+
 export function parseTypedStruct(
   data: Uint8Array,
   fields: Array<{ name: string; type?: string; size?: number }>,
 ): Record<string, any> {
   const expected = fields.reduce(
-    (total, field) => total + Number(field.size ?? (field.type === "address" ? 32 : 8)),
+    (total, field) => total + Number(field.size ?? ({address: 32, uint48: 6, uint16: 2}[field.type ?? "uint64"] ?? 8)),
     0,
   );
   if (data.byteLength !== expected) throw new Error(`struct expects ${expected} bytes`);
@@ -189,12 +195,15 @@ export function parseTypedStruct(
   let offset = 0;
   for (const field of fields) {
     const fieldType = field.type ?? "uint64";
-    const size = Number(field.size ?? (fieldType === "address" ? 32 : 8));
+    const size = Number(field.size ?? ({address: 32, uint48: 6, uint16: 2}[fieldType] ?? 8));
     const raw = data.slice(offset, offset + size);
     offset += size;
-    if (fieldType === "uint64") {
-      if (size !== 8) throw new Error(`uint64 field ${field.name} must be 8 bytes`);
-      out[field.name] = new DataView(raw.buffer, raw.byteOffset, 8).getBigUint64(0);
+    if (fieldType === "uint64" || fieldType === "uint48" || fieldType === "uint16") {
+      const width = {uint64: 8, uint48: 6, uint16: 2}[fieldType];
+      if (size !== width) throw new Error(`${fieldType} field ${field.name} must be ${width} bytes`);
+      let value = 0n;
+      for (const byte of raw) value = (value << 8n) | BigInt(byte);
+      out[field.name] = value;
     } else if (fieldType === "address") {
       if (size !== 32) throw new Error(`address field ${field.name} must be 32 bytes`);
       out[field.name] = encodeAddress(raw);
@@ -222,10 +231,8 @@ export function parseBoxState(
 export function parseV2OrderState(
   data: Uint8Array,
   manifest: ProtocolManifest = loadManifest(undefined, 2),
-): V2OrderStateV3 {
-  const parsed = parseV2BoxState("order_state", data, manifest);
-  if (parsed.schema_version !== 3n) throw new Error("unsupported V2 order schema");
-  return parsed as unknown as V2OrderStateV3;
+): V2DecodedOrderState {
+  return parseV2BoxState("order_state", data, manifest) as unknown as V2DecodedOrderState;
 }
 
 export function parseV2BoxState(
@@ -233,9 +240,18 @@ export function parseV2BoxState(
   data: Uint8Array,
   manifest: ProtocolManifest = loadManifest(undefined, 2),
 ): Record<string, any> {
-  const fields = manifest.boxes.formats[boxFormat]?.fields;
+  let fields = manifest.boxes.formats[boxFormat]?.fields;
   if (!fields) throw new Error(`unknown V2 box format: ${boxFormat}`);
-  return parseTypedStruct(data, fields);
+  if (boxFormat === "order_state" && data.byteLength === 192 && fields.at(-1)?.name === "position_id") {
+    fields = fields.slice(0, -1);
+  }
+  const parsed = parseTypedStruct(data, fields);
+  if (boxFormat === "order_state") {
+    const expectedSchema = data.byteLength === 192 ? 3n : data.byteLength === 200 ? 4n : undefined;
+    if (expectedSchema === undefined || parsed.schema_version !== expectedSchema) throw new Error("order schema/length mismatch");
+    if (parsed.position_id !== undefined && parsed.position_id >= 1n << 48n) throw new Error("position id out of range");
+  }
+  return parsed;
 }
 
 export function parseV2MarketCoreState(data: Uint8Array, manifest?: ProtocolManifest): Record<string, bigint> {

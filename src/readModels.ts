@@ -56,6 +56,7 @@ export interface V2TraderState extends PdexStateRecord {
 }
 
 export interface V2PositionState extends PdexStateRecord {
+  position_id?: PdexJsonInteger;
   owner?: string;
   market_id?: PdexJsonInteger;
   pool_id?: PdexJsonInteger;
@@ -74,6 +75,8 @@ export interface V2PositionState extends PdexStateRecord {
 }
 
 export interface V2OrderState extends PdexStateRecord {
+  schema_version?: PdexJsonInteger;
+  position_id?: PdexJsonInteger;
   owner?: string;
   owner_order_id?: PdexJsonInteger;
   order_id?: PdexJsonInteger;

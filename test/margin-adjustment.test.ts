@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildV2AddPositionMarginCall, buildV2SingleTokenAddPositionMarginCall, buildV2SingleTokenWithdrawPositionMarginCall, buildV2WithdrawPositionMarginCall } from "../src/transactions.js";
+import { decodeUint64 } from "algosdk";
+import { buildV2DecreaseOrCloseCall, buildV2SingleTokenDecreaseOrCloseCall, buildV2AddPositionMarginCall, buildV2SingleTokenAddPositionMarginCall, buildV2SingleTokenWithdrawPositionMarginCall, buildV2WithdrawPositionMarginCall } from "../src/transactions.js";
 import { planV2Flow } from "../src/planners.js";
 import { setProtocolManifest } from "../src/manifest.js";
 
@@ -19,8 +20,8 @@ const manifest = {
           ["uint64", "txn", "uint64", "uint64", "uint64", "(address,uint64)", "byte[]", "byte[]"],
         ),
         decrease_or_close: methodSpec(
-          "decrease_or_close(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,(address,uint64),byte[],byte[],uint64,uint64,uint64)byte[]",
-          ["uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "(address,uint64)", "byte[]", "byte[]", "uint64", "uint64", "uint64"],
+          "decrease_or_close(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,(address,uint64),byte[],byte[],uint64,uint64,uint64,uint64)byte[]",
+          ["uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "(address,uint64)", "byte[]", "byte[]", "uint64", "uint64", "uint64", "uint64"],
         ),
       },
     },
@@ -31,8 +32,8 @@ const manifest = {
           ["uint64", "txn", "uint64", "uint64", "uint64", "byte[]", "byte[]"],
         ),
         decrease_or_close: methodSpec(
-          "decrease_or_close(uint64,uint64,uint64,uint64,uint64,uint64,byte[],byte[],uint64,uint64)byte[]",
-          ["uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "byte[]", "byte[]", "uint64", "uint64"],
+          "decrease_or_close(uint64,uint64,uint64,uint64,uint64,uint64,byte[],byte[],uint64,uint64,uint64)byte[]",
+          ["uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "byte[]", "byte[]", "uint64", "uint64", "uint64"],
         ),
       },
     },
@@ -77,7 +78,7 @@ test("V2 margin adjustment builders use Math resource carriers", () => {
 
   assert.equal(withdraw.resourceCarrier?.method, "noop");
   assert.equal(withdraw.method, "decrease_or_close");
-  assert.equal(withdraw.appArgs.length, 15);
+  assert.equal(withdraw.appArgs.length, 16);
   assert.deepEqual(withdraw.foreignApps, [2003, 2008]);
   assert.ok(withdraw.boxes.some((box) => Number(box.appIndex) === 2008));
 
@@ -88,7 +89,7 @@ test("V2 margin adjustment builders use Math resource carriers", () => {
 
   assert.equal(singleWithdraw.resourceCarrier?.method, "noop");
   assert.equal(singleWithdraw.method, "decrease_or_close");
-  assert.equal(singleWithdraw.appArgs.length, 11);
+  assert.equal(singleWithdraw.appArgs.length, 12);
   assert.deepEqual(singleWithdraw.foreignApps, [2003, 2008]);
   assert.ok(singleWithdraw.boxes.some((box) => Number(box.appIndex) === 2008));
 });
@@ -110,4 +111,19 @@ function methodSpec(signature: string, types: string[]) {
     signature,
     args: types.map((type, index) => ({ type, name: `arg${index}` })),
   };
+}
+
+for (const builder of [buildV2DecreaseOrCloseCall, buildV2SingleTokenDecreaseOrCloseCall,
+  buildV2WithdrawPositionMarginCall, buildV2SingleTokenWithdrawPositionMarginCall]) {
+  test(`${builder.name}: direct close signs a bounded optional lifetime`, () => {
+    const input = { ...common, collateralAmount: 1_000_000, sizeUsdDelta: 1_000_000, minPrimaryOutput: 0 };
+    for (const expectedPositionId of [0n, 17n, (1n << 48n) - 1n]) {
+      const call = builder({ ...input, expectedPositionId });
+      assert.equal(decodeUint64(call.appArgs.at(-1)!, "bigint"), expectedPositionId);
+    }
+    assert.equal(decodeUint64(builder(input).appArgs.at(-1)!, "bigint"), (1n << 64n) - 1n);
+    for (const invalid of [null, true, -1, 1.5, "", 1n << 48n]) {
+      assert.throws(() => builder({ ...input, expectedPositionId: invalid as never }));
+    }
+  });
 }

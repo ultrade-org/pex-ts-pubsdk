@@ -412,6 +412,7 @@ function longPosition(overrides: Record<string, unknown> = {}): Record<string, u
     side: 1n,
     size_usd: 20_000_000n,
     size_tokens: 400_000n,
+    position_id: 0n,
     collateral_amount: 8_000_000n,
     entry_price: p(50_000_000_000n),
     ...overrides,

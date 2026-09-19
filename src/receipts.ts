@@ -111,7 +111,7 @@ function eventInfo(
   const filtered = candidates.filter((event) => {
     if (fieldCount !== undefined && event.fields.length !== fieldCount) return false;
     if (fieldPayloadSize !== undefined && eventPayloadSize(manifest, event.name) !== fieldPayloadSize) return false;
-    if (appName && event.app && event.app !== appName && !receiptAppAlias(appName, event.app, event.name)) return false;
+    if (appName && event.app && !event.app.split("|").includes(appName) && !receiptAppAlias(appName, event.app, event.name)) return false;
     return true;
   });
   if (filtered.length === 1) return filtered[0];

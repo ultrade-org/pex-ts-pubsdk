@@ -57,8 +57,8 @@ setProtocolManifest({
         ["uint64", "txn", "uint64", "uint64", "uint64", "(address,uint64)", "byte[]", "byte[]"],
       ),
       decrease_or_close: methodSpec(
-        "decrease_or_close(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,(address,uint64),byte[],byte[],uint64,uint64,uint64)byte[]",
-        ["uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "(address,uint64)", "byte[]", "byte[]", "uint64", "uint64", "uint64"],
+        "decrease_or_close(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,(address,uint64),byte[],byte[],uint64,uint64,uint64,uint64)byte[]",
+        ["uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "(address,uint64)", "byte[]", "byte[]", "uint64", "uint64", "uint64", "uint64"],
       ),
     } },
     PDexV2SwapOps: { method_specs: {
@@ -73,12 +73,12 @@ setProtocolManifest({
     } },
     PDexV2OrderOps: { method_specs: {
       submit_order: methodSpec(
-        "submit_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,(address,uint64),txn,pay,byte[],byte[])byte[]",
-        ["uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "(address,uint64)", "txn", "pay", "byte[]", "byte[]"],
+        "submit_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,(address,uint64),txn,pay,byte[],byte[])byte[]",
+        ["uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "(address,uint64)", "txn", "pay", "byte[]", "byte[]"],
       ),
       submit_linked_order: methodSpec(
-        "submit_linked_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,(address,uint64),txn,pay,byte[],byte[])byte[]",
-        ["uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "(address,uint64)", "txn", "pay", "byte[]", "byte[]"],
+        "submit_linked_order(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,(address,uint64),txn,pay,byte[],byte[])byte[]",
+        ["uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "uint64", "(address,uint64)", "txn", "pay", "byte[]", "byte[]"],
       ),
       execute_order: methodSpec(
         "execute_order(address,uint64,byte[],byte[],uint64,uint64,uint64)byte[]",
@@ -217,7 +217,7 @@ test("pair descriptors and stored orders preserve builder authorization", () => 
       <= 8,
   );
 
-  const submit = buildV2SubmitOrderCall({
+  const submissionInput = {
     ...common,
     v2OrderOpsAppId: 2010,
     v2SingleTokenTradingAppId: 3002,
@@ -234,7 +234,11 @@ test("pair descriptors and stored orders preserve builder authorization", () => 
     keeperFeeAmount: 5_000n,
     timeInForce: 1,
     builderFee,
-  });
+  };
+  const submit = buildV2SubmitOrderCall(submissionInput);
+  for (const invalid of [null, true, false, "", " ", 1.5]) {
+    assert.throws(() => buildV2SubmitOrderCall({ ...submissionInput, expectedPositionId: invalid as never }));
+  }
   assert.deepEqual(submit.accounts, [BUILDER]);
   assert.equal(submit.flatFeeMicroAlgo, BigInt(V2_ORDER_OPS_METHOD_FLAT_FEE_MICRO_ALGO) + 1_000n);
 
@@ -318,12 +322,13 @@ test("quotes disclose additive fees and typed OrderStateV3 decodes the persisted
   const decoded = parseV2OrderState(bytes);
   assert.equal(decoded.builder_address, BUILDER);
   assert.equal(decoded.builder_fee_bps, 10n);
-  assert.equal(V2_ORDER_BOX_MBR_MICRO_ALGO, 96_500);
+  assert.equal(V2_ORDER_BOX_MBR_MICRO_ALGO, 99_700);
 });
 
 
 test("active attached orders build one bounded atomic group", () => {
   const group = buildV2ActiveAttachedOrdersTransactions({
+    expectedPositionId: 0n,
     ...common,
     v2OrderOpsAppId: 2010,
     v2SingleTokenTradingAppId: 3002,
