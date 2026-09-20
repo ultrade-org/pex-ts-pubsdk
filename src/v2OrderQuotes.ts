@@ -356,6 +356,7 @@ function buildOpenLimitOrder(input: V2OpenLimitOrderQuoteInput): V2StateRecord {
     targetKind === V2_ORDER_TARGET.PAIR ? MAX_POSITION_BUILDER_FEE_BPS : 0n,
   );
   return withPriceFields({
+    schema_version: 4,
     owner: input.owner,
     owner_order_id: input.ownerOrderId ?? 0,
     order_id: input.ownerOrderId ?? 0,
@@ -390,6 +391,7 @@ function buildDecreaseOrder(input: V2DecreaseOrderQuoteInput): V2StateRecord {
     targetKind === V2_ORDER_TARGET.PAIR ? MAX_POSITION_BUILDER_FEE_BPS : 0n,
   );
   return withPriceFields({
+    schema_version: 4,
     owner: input.owner,
     owner_order_id: input.ownerOrderId ?? 0,
     order_id: input.ownerOrderId ?? 0,

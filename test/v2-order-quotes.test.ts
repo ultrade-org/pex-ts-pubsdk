@@ -21,7 +21,7 @@ const p = (price6: bigint): bigint => price6 * 1_000_000n;
 
 test("V2 open-limit order quote executes crossed pair orders", () => {
   const quote = quoteV2OpenLimitOrder({
-    market: marketState(),
+    market: marketState({ schema_version: 3 }),
     pool: poolState(),
     owner: OWNER,
     ownerOrderId: 1n,
@@ -35,6 +35,7 @@ test("V2 open-limit order quote executes crossed pair orders", () => {
   });
 
   assert.equal(quote.ok, true);
+  assert.equal(((quote.lifecycle as Record<string, unknown>).order as Record<string, unknown>).schema_version, 4);
   assert.equal(quote.type, "v2_open_limit_order_quote");
   assert.equal(quote.crossed, true);
   assert.equal(quote.submission_result, "execute_immediately");
@@ -42,6 +43,42 @@ test("V2 open-limit order quote executes crossed pair orders", () => {
   assert.equal(quote.required_flat_fee_microalgos, BigInt(V2_ORDER_OPS_INLINE_EXECUTION_METHOD_FLAT_FEE_MICRO_ALGO));
   assert.equal(quote.escrow_amount, 6_005_000n);
   assert.equal((quote.execution_quote as Record<string, unknown>).type, "v2_open");
+});
+
+test("new TP/SL quotes ignore market schema while stored V3 protection remains retired", () => {
+  const market = marketState({ schema_version: 3 });
+  for (const orderKind of [V2_ORDER_KIND.DECREASE_TAKE_PROFIT, V2_ORDER_KIND.DECREASE_STOP_LOSS]) {
+    const quote = quoteV2DecreaseOrder({
+      market,
+      pool: poolState(),
+      position: longPosition(),
+      owner: OWNER,
+      orderKind,
+      collateralAssetId: USDC,
+      side: 1n,
+      sizeUsdDelta: 5_000_000n,
+      triggerPrice: p(orderKind === V2_ORDER_KIND.DECREASE_TAKE_PROFIT ? 60_000_000_000n : 40_000_000_000n),
+      keeperFeeAmount: 5_000n,
+      prices: prices(),
+    });
+    assert.equal(quote.ok, true);
+    assert.equal(quote.submission_result, "store");
+    const lifecycle = quote.lifecycle as Record<string, unknown>;
+    const order = lifecycle.order as Record<string, unknown>;
+    assert.equal(order.schema_version, 4);
+    assert.equal(lifecycle.positionMatches, true);
+    assert.equal(lifecycle.cleanupReason, "");
+    const legacy = quoteV2ExecuteOrder({
+      market,
+      pool: poolState(),
+      position: longPosition(),
+      order: { ...order, schema_version: 3 },
+      prices: prices(),
+    });
+    assert.equal(legacy.ok, false);
+    assert.equal((legacy.lifecycle as Record<string, unknown>).cleanupReason, "legacy_retired");
+    assert.equal(legacy.execution_quote, null);
+  }
 });
 
 test("V2 open-limit order quote rejects under-margined resulting positions", () => {
