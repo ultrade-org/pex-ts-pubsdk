@@ -34,25 +34,48 @@ path from configuration to a confirmed wallet transaction.
 ## Install from source
 
 Clone the repository and check out a reviewed commit or release tag so the SDK
-source is pinned:
+source is pinned. For the unreleased 0.5.0 candidate, replace the reference below
+with the supplied commit; do not activate it against the older contracts:
 
 ```bash
 git clone https://github.com/ultrade-org/pex-ts-pubsdk.git
 cd pex-ts-pubsdk
-git checkout v0.4.0
+git checkout YOUR_REVIEWED_0_5_0_REF
 npm ci --ignore-scripts
 npm run build
 npm pack --ignore-scripts
 ```
 
-The final command creates `pdex-sdk-0.4.0.tgz`. Install that exact tarball in
+The final command creates `pdex-sdk-0.5.0.tgz`. Install that exact tarball in
 your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm install --save-exact /path/to/pdex-sdk-0.4.0.tgz --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.5.0.tgz --ignore-scripts
 ```
 
-## Updating to 0.4.0
+## Updating to 0.5.0 (breaking)
+
+Coordinate activation with the position-identity contract upgrade. Prepare and
+test beforehand; new transaction builders are not compatible with the older
+contracts. Rebuild cached unsigned transactions and reload clients at cutover.
+
+- Update position/order parsers and protocol definitions, including your own
+  backend or indexer. Use `position_id` to distinguish position lifetimes;
+  verified existing positions have ID zero. Never substitute zero for missing data.
+- Direct decrease/close and order-submission ABIs changed. Use the updated
+  builders even for manual closes and standalone limit entries.
+- Existing-position TP/SL requires `expectedPositionId`. Use the attachment
+  helpers for same-group entries and pending brackets. See the
+  [order integration notes](./INTEGRATION_GUIDE.md#position-bound-orders-050).
+- Refresh order storage funding and resource preparation through SDK helpers.
+  Entry/increase order builders need the market's current yield registry.
+- Old TP/SL and linked entry brackets retire, with refunds, rather than trade.
+  Tell affected users to recreate protection; old standalone entries remain valid.
+  Treat orphan/legacy cancellation receipts as cancellations, not trading volume.
+
+Existing position balances need no migration. LP and swap ABIs are unchanged.
+
+## Oracle consumption (since 0.4.0)
 
 Oracle support consumes published signed payloads: fetch, decode, verify, and
 pass the received bytes to transaction builders. Oracle requests select the
@@ -73,7 +96,8 @@ includes accrued costs, close fees, and capped negative liquidation impact.
 Use `post_action_liquidatable` to assess an ADL survivor separately from
 `adl_survivor_contract_admissible`, which describes emergency admissibility.
 
-From 0.3.0, no new required inputs are introduced. From 0.2.x, also apply the
+The 0.3.2 corrections introduced no new required inputs relative to 0.3.0;
+0.5.0 has the breaking changes above. From 0.2.x, also apply the
 [recall preparation migration](./INTEGRATION_GUIDE.md#recall-preparation).
 Rebuild and regroup unsigned transactions with the updated SDK before signing.
 

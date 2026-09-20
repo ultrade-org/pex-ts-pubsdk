@@ -166,6 +166,23 @@ Use the prepared result, including its explicit zero mode for a market with no
 configured yield. The SDK cannot secure transactions constructed by other
 clients or replace contract enforcement of market-owned liquidity.
 
+### Position-bound orders (0.5.0)
+
+Read the current position's `position_id` and pass it as `expectedPositionId`
+when adding protection to that position, including an explicitly verified zero.
+Match displayed active protection by owner, market, collateral, side **and ID**.
+Use the SDK attachment helpers for entry-plus-TP/SL groups; they derive the
+same-group references. Pending bracket children bind when their entry fills.
+
+Use updated parsers for both legacy V3 and new V4 orders. Legacy TP/SL and linked
+brackets no longer protect positions after cutover and must be recreated. Keep
+orphan and legacy-retirement cancellation outcomes separate from executed trades.
+Use SDK storage constants and supply the current `marketYieldRegistry` when
+building entry/increase orders so automatic cost settlement has its resources.
+If an attachment group exceeds the chain limit, do not split it silently: obtain
+explicit approval for an entry followed by protection, using the confirmed ID,
+and report the position as unprotected if the second step fails.
+
 ### Already-triggered TP and SL submissions
 
 Standalone `submit_order` can execute immediately when its signed OrderOps
@@ -174,7 +191,8 @@ arguments. For a crossed TP/SL, obtain a Trading (or SingleTokenTrading) oracle,
 recheck the trigger against that exact message, and submit the recall-prepared
 close instead. Use index minimum for a long and index maximum for a short;
 TP crosses at `>=` for long and `<=` for short, SL at `<=` for long and `>=`
-for short. Preserve size, acceptable price and minimum output. If the trigger
+for short. Preserve size, acceptable price and minimum output, and pass the
+verified `expectedPositionId` to the direct close builder. If the trigger
 is no longer crossed, refresh rather than signing a direct close. For GTD,
 require the close oracle's expiry to be strictly before the order deadline;
 otherwise stop and request a later deadline. The contract oracle age limit
