@@ -5868,7 +5868,8 @@ export function v2LargeProgramRoles(
   ) {
     roles.push("trading");
   }
-  if (appName === "PDexV2SingleTokenTrading") roles.push("single_token_trading");
+  if (appName === "PDexV2SingleTokenTrading"
+    || (appName === "PDexV2OrderOps" && V2_TRADING_CALLER_METHODS.PDexV2OrderOps.has(methodName))) roles.push("single_token_trading");
   if (appName === "PDexV2OrderOps") roles.push("order_ops");
   return roles;
 }
