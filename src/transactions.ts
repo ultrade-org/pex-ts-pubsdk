@@ -922,12 +922,12 @@ function v2OrderCrossedByOracle(input: {
   orderKind: BigNumberish;
   side: BigNumberish;
   triggerPrice: BigNumberish;
-}): boolean {
+}, onDecodeFailure = false): boolean {
   let oracle: import("./oracle.js").OracleMessageV3;
   try {
     oracle = decodeV2OracleSnapshotMessage(bytes(input.oracleMessage));
   } catch {
-    return false;
+    return onDecodeFailure;
   }
   const orderKind = Number(input.orderKind);
   const side = Number(input.side);
@@ -1985,7 +1985,7 @@ export function buildV2SubmitOrderCall(input: V2SubmitOrderInput): AppCallDescri
   const resourceCarrier = buildV2TradingResourceCarrierCall(input, input.sender);
   const yieldFreshnessCarriers = buildV2MarketYieldFreshnessResourceCarriers(input, input.sender, input.marketId, true);
   const executionResourceCarrier = buildV2OrderExecutionResourceCarrier(input, input.orderKind);
-  const call = buildAppCall({
+  let call = buildAppCall({
     appId: v2OrderOpsAppId(input),
     appName: "PDexV2OrderOps",
     methodName: "submit_order",
@@ -2030,12 +2030,31 @@ export function buildV2SubmitOrderCall(input: V2SubmitOrderInput): AppCallDescri
       + (builderFeeBps > 0n ? 1_000n : 0n),
     manifest: input.manifest ?? loadManifest(undefined, 2),
   }) as AppCallDescriptor & { abiTransactionArgs?: string[] };
+  if (
+    Number(input.orderKind) === V2_ORDER_KIND.OPEN_LIMIT
+    && v2OrderCrossedByOracle(input, true)
+  ) {
+    call = mergeV2AutomaticSettlementRecallResources(
+      call,
+      input as unknown as Record<string, unknown> & { marketId: BigNumberish },
+      targetKind === V2_ORDER_TARGET.SINGLE_TOKEN
+        ? [input.collateralAssetId]
+        : [input.longAssetId ?? 0, input.shortAssetId ?? 0],
+      [
+        resourceCarrier,
+        ...yieldFreshnessCarriers,
+        ...(executionResourceCarrier ? [executionResourceCarrier] : []),
+      ],
+    );
+  }
+  const settlementRecallCarriers = call.resourceCarriers ?? [];
   call.abiTransactionArgs = ["escrow_transfer", "storage_payment"];
   call.largeProgramRoles = v2OrderTradingRoles(targetKind);
   call.resourceCarrier = resourceCarrier;
   call.resourceCarriers = [
     ...yieldFreshnessCarriers,
     ...(executionResourceCarrier ? [executionResourceCarrier] : []),
+    ...settlementRecallCarriers,
   ];
   if (!call.resourceCarriers.length) delete call.resourceCarriers;
   return call;
@@ -2114,7 +2133,7 @@ export function buildV2SubmitLinkedOrderCall(input: V2SubmitLinkedOrderInput): A
           input.sender, input.marketId, input.collateralAssetId, input.side,
         )] as [number, Uint8Array]]
       : [];
-  const call = buildAppCall({
+  let call = buildAppCall({
     appId: v2OrderOpsAppId(input),
     appName: "PDexV2OrderOps",
     methodName: "submit_linked_order",
@@ -2154,6 +2173,23 @@ export function buildV2SubmitLinkedOrderCall(input: V2SubmitLinkedOrderInput): A
     flatFeeMicroAlgo: v2SubmitOrderFlatFee(input),
     manifest: input.manifest ?? loadManifest(undefined, 2),
   }) as AppCallDescriptor & { abiTransactionArgs?: string[] };
+  if (
+    Number(input.linkMode) === V2_ORDER_LINK_MODE.BRACKET_PARENT
+    && v2OrderCrossedByOracle(input, true)
+  ) {
+    call = mergeV2AutomaticSettlementRecallResources(
+      call,
+      input as unknown as Record<string, unknown> & { marketId: BigNumberish },
+      targetKind === V2_ORDER_TARGET.SINGLE_TOKEN
+        ? [input.collateralAssetId]
+        : [input.longAssetId ?? 0, input.shortAssetId ?? 0],
+      [
+        ...yieldFreshnessCarriers,
+        ...(executionResourceCarrier ? [executionResourceCarrier] : []),
+      ],
+    );
+  }
+  const settlementRecallCarriers = call.resourceCarriers ?? [];
   call.abiTransactionArgs = ["escrow_transfer", "storage_payment"];
   call.largeProgramRoles = Number(input.linkMode) === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT
     ? ["order_ops", "markets"]
@@ -2161,6 +2197,7 @@ export function buildV2SubmitLinkedOrderCall(input: V2SubmitLinkedOrderInput): A
   call.resourceCarriers = [
     ...yieldFreshnessCarriers,
     ...(executionResourceCarrier ? [executionResourceCarrier] : []),
+    ...settlementRecallCarriers,
   ];
   if (!call.resourceCarriers.length) delete call.resourceCarriers;
   return call;
@@ -2221,7 +2258,16 @@ export function buildV2ExecuteOrderCall(input: V2ExecuteOrderInput): AppCallDesc
         + (builderFeeBps > 0n ? 1_000n : 0n),
   });
   let merged: AppCallDescriptor;
-  if (targetKind === V2_ORDER_TARGET.SINGLE_TOKEN) {
+  if (orderKind === V2_ORDER_KIND.OPEN_LIMIT) {
+    merged = mergeV2AutomaticSettlementRecallResources(
+      base,
+      input as unknown as Record<string, unknown> & { marketId: BigNumberish },
+      targetKind === V2_ORDER_TARGET.SINGLE_TOKEN
+        ? [input.collateralAssetId]
+        : [input.longAssetId ?? 0, input.shortAssetId ?? 0],
+      [resourceCarrier, ...yieldFreshnessCarriers],
+    );
+  } else if (targetKind === V2_ORDER_TARGET.SINGLE_TOKEN) {
     merged = mergeV2SingleTokenActionRecallResources(
       base,
       {
@@ -5364,15 +5410,21 @@ type V2ActionRecallResourceBundle = {
 function v2AutomaticSettlementRouterAppId(input: Record<string, unknown>): number {
   const rawRegistry = (input.marketYieldRegistry ?? input.market_yield_registry) as Record<string, unknown> | undefined;
   const registry = (rawRegistry?.snapshot ?? rawRegistry) as Record<string, unknown> | undefined;
-  const appId = Number(
+  const directAppId = Number(
     input.v2MarketXalgoYieldVaultAppId
       ?? input.v2_market_xalgo_yield_vault_app_id
       ?? input.marketXalgoYieldVaultAppId
       ?? input.market_xalgo_yield_vault_app_id
-      ?? registry?.market_xalgo_yield_vault_app_id
-      ?? registry?.marketXalgoYieldVaultAppId
       ?? 0,
   );
+  const registryAppId = Number(
+    registry?.market_xalgo_yield_vault_app_id
+      || registry?.marketXalgoYieldVaultAppId
+      || registry?.market_yield_vault_app_id
+      || registry?.marketYieldVaultAppId
+      || 0,
+  );
+  const appId = directAppId > 0 ? directAppId : registryAppId;
   if (!Number.isFinite(appId) || appId <= 0) {
     throw new Error("v2MarketXalgoYieldVaultAppId is required for automatic position-cost settlement");
   }
@@ -5401,11 +5453,15 @@ function mergeV2AutomaticSettlementRecallResources(
   assetIds: BigNumberish[],
   coveredResourceCalls: AppCallDescriptor[],
 ): AppCallDescriptor {
+  const existingResourceCarriers = call.resourceCarriers ?? [];
+  const resourceCoverageCalls = [
+    ...new Set([...coveredResourceCalls, ...existingResourceCarriers]),
+  ];
   const strategyAssets = v2AutomaticSettlementStrategyAssets(input, assetIds);
   const routerAppId = v2AutomaticSettlementRouterAppId(input);
-  let routerCovered = coveredResourceCalls.some((descriptor) => descriptor.foreignApps.includes(routerAppId));
+  let routerCovered = resourceCoverageCalls.some((descriptor) => descriptor.foreignApps.includes(routerAppId));
   if (!routerCovered) {
-    for (const descriptor of coveredResourceCalls) {
+    for (const descriptor of resourceCoverageCalls) {
       const resourceCount = descriptor.foreignApps.length
         + descriptor.foreignAssets.length
         + descriptor.accounts.length
@@ -5423,7 +5479,7 @@ function mergeV2AutomaticSettlementRecallResources(
       input,
       call.sender,
       { foreignApps: [routerAppId], foreignAssets: [], accounts: [], boxes: [] },
-      [call, ...coveredResourceCalls],
+      [call, ...resourceCoverageCalls],
     );
   if (!strategyAssets.length) {
     return {
@@ -5431,15 +5487,17 @@ function mergeV2AutomaticSettlementRecallResources(
       resourceCarriers: [...routerCarriers, ...(call.resourceCarriers ?? [])],
     };
   }
+  const settlementCall = { ...call };
+  delete settlementCall.resourceCarriers;
   const settlementInput = { ...input, yieldRecallMode: 1 };
   const withResources = mergeV2ActionRecallResources(
-    call,
+    settlementCall,
     settlementInput,
     strategyAssets,
     // Each configured claim asset can traverse the complete router -> Folks
     // vault -> provider return path during one settlement.
     3 * strategyAssets.length,
-    [...coveredResourceCalls, ...routerCarriers],
+    [...resourceCoverageCalls, ...routerCarriers],
   );
   const withFee = withV2ActionXalgoProviderFeeCredit(
     withResources,
@@ -5449,7 +5507,11 @@ function mergeV2AutomaticSettlementRecallResources(
   );
   return {
     ...withFee,
-    resourceCarriers: [...routerCarriers, ...(withFee.resourceCarriers ?? [])],
+    resourceCarriers: [
+      ...routerCarriers,
+      ...existingResourceCarriers,
+      ...(withFee.resourceCarriers ?? []),
+    ],
   };
 }
 
@@ -6451,13 +6513,17 @@ function appendAttachedOrderLegTransactions(
   },
 ): boolean {
   if (!leg) return false;
+  const entryGroupOffset = options.entryTransactionIndex === undefined
+    ? 0
+    : transactions.length + 2 - options.entryTransactionIndex;
+  if (entryGroupOffset > 15) throw new Error("group_too_large");
   transactions.push(
     ...buildV2SubmitLinkedOrderTransactionParts(
       {
         ...v2AttachedChildInput(parent, leg, options),
         ...(options.entryTransactionIndex === undefined ? {} : {
           expectedPositionId: 0n,
-          entryGroupOffset: transactions.length + 2 - options.entryTransactionIndex,
+          entryGroupOffset,
         }),
       },
       options.suggestedParams,
