@@ -6522,7 +6522,8 @@ function appendAttachedOrderLegTransactions(
         }),
       },
       options.suggestedParams,
-      false,
+      // A standalone attachment has no entry-group program-budget carriers.
+      transactions.length === 0,
       options.sharedCarrierOrderIds,
     ),
   );

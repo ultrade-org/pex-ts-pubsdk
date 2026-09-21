@@ -326,7 +326,8 @@ test("quotes disclose additive fees and typed OrderStateV3 decodes the persisted
 });
 
 
-test("active attached orders build one bounded atomic group", () => {
+for (const selection of ["both", "tp", "sl"] as const) {
+test(`active attached orders build one bounded atomic group: ${selection}`, () => {
   const group = buildV2ActiveAttachedOrdersTransactions({
     expectedPositionId: 0n,
     ...common,
@@ -339,18 +340,25 @@ test("active attached orders build one bounded atomic group", () => {
     collateralAmount: 0,
     sizeUsdDelta: 10_000_000,
     acceptablePrice: 50_100_000,
-    takeProfit: { keeperFeeAmount: 5_000, keeperFeeAssetId: 12, timeInForce: 1, triggerPrice: 55_000_000, acceptablePrice: 54_900_000 },
-    stopLoss: { keeperFeeAmount: 5_000, keeperFeeAssetId: 12, timeInForce: 1, triggerPrice: 45_000_000, acceptablePrice: 44_900_000 },
+    takeProfit: selection === "sl" ? undefined : { keeperFeeAmount: 5_000, keeperFeeAssetId: 12, timeInForce: 1, triggerPrice: 55_000_000, acceptablePrice: 54_900_000 },
+    stopLoss: selection === "tp" ? undefined : { keeperFeeAmount: 5_000, keeperFeeAssetId: 12, timeInForce: 1, triggerPrice: 45_000_000, acceptablePrice: 44_900_000 },
   }, params);
-  assert.equal(group.length, 8);
+  assert.ok(group.length <= 16);
+  const legCount = selection === "both" ? 2 : 1;
+  for (const txn of group) {
+    const app = txn.applicationCall;
+    if (app) assert.ok(app.boxes.length + app.foreignApps.length + app.foreignAssets.length + app.accounts.length <= 8);
+  }
   assert.equal(v2TransactionGroupResult(group).primaryIndex, 2);
-  assert.equal(group.filter((txn) => Number(txn.applicationCall?.appIndex ?? 0) === 2010).length, 2);
+  assert.equal(group.filter((txn) => Number(txn.applicationCall?.appIndex ?? 0) === 2010).length, legCount);
   assert.deepEqual(
     group.filter((txn) => txn.payment).map((txn) => txn.payment?.amount),
-    [BigInt(V2_ORDER_BOX_MBR_MICRO_ALGO), BigInt(V2_ORDER_BOX_MBR_MICRO_ALGO)],
+    Array(legCount).fill(BigInt(V2_ORDER_BOX_MBR_MICRO_ALGO)),
   );
   assert.equal(new Set(group.map((txn) => Buffer.from(txn.group ?? new Uint8Array()).toString("hex"))).size, 1);
 });
+
+}
 
 function marketState(): Record<string, bigint> {
   return {

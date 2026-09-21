@@ -34,24 +34,29 @@ path from configuration to a confirmed wallet transaction.
 ## Install from source
 
 Clone the repository and check out a reviewed commit or release tag so the SDK
-source is pinned. For the 0.6.0 candidate, replace the reference below
-with the supplied commit; do not activate it against the older contracts:
+source is pinned. For version 0.6.1, replace the reference below with the supplied commit.
+This version requires the position-identity contracts:
 
 ```bash
 git clone https://github.com/ultrade-org/pex-ts-pubsdk.git
 cd pex-ts-pubsdk
-git checkout YOUR_REVIEWED_0_6_0_REF
+git checkout YOUR_REVIEWED_0_6_1_REF
 npm ci --ignore-scripts
 npm run build
 npm pack --ignore-scripts
 ```
 
-The final command creates `pdex-sdk-0.6.0.tgz`. Install that exact tarball in
+The final command creates `pdex-sdk-0.6.1.tgz`. Install that exact tarball in
 your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm install --save-exact /path/to/pdex-sdk-0.6.0.tgz --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.6.1.tgz --ignore-scripts
 ```
+
+## Updating from 0.6.0 to 0.6.1
+
+Fixes transaction resource budgeting when attaching only a TP or only an SL
+after an entry. Rebuild clients using the updated SDK; no API changes.
 
 ## Updating from 0.5.0 to 0.6.0
 
