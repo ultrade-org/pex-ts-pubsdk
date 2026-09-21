@@ -1,6 +1,6 @@
 {
   "name": "@pdex/sdk",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "license": "SEE LICENSE IN LICENSE",
   "description": "Public TypeScript SDK for integrating with the PDex V2 protocol",
   "type": "module",

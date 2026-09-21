@@ -45,7 +45,7 @@ test("V2 open-limit order quote executes crossed pair orders", () => {
   assert.equal((quote.execution_quote as Record<string, unknown>).type, "v2_open");
 });
 
-test("new TP/SL quotes ignore market schema while stored V3 protection remains retired", () => {
+test("new TP/SL quotes ignore market schema while stored V3 protection waits for its trigger", () => {
   const market = marketState({ schema_version: 3 });
   for (const orderKind of [V2_ORDER_KIND.DECREASE_TAKE_PROFIT, V2_ORDER_KIND.DECREASE_STOP_LOSS]) {
     const quote = quoteV2DecreaseOrder({
@@ -76,7 +76,8 @@ test("new TP/SL quotes ignore market schema while stored V3 protection remains r
       prices: prices(),
     });
     assert.equal(legacy.ok, false);
-    assert.equal((legacy.lifecycle as Record<string, unknown>).cleanupReason, "legacy_retired");
+    assert.equal((legacy.lifecycle as Record<string, unknown>).cleanupReason, "");
+    assert.ok(((legacy.lifecycle as Record<string, unknown>).executionBlockers as string[]).includes("not_crossed"));
     assert.equal(legacy.execution_quote, null);
   }
 });

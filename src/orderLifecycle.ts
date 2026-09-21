@@ -176,7 +176,7 @@ export function analyzeV2OrderLifecycle(
     (candidate) => orderOwnerId(candidate) === linkBaseOrderId && v2OrderKeyFromOrder(candidate).key === key.key,
   );
   const schemaVersion = Number(get(mergedOrder, "schema_version", "schemaVersion")) || (options.hypothetical ? 4 : 0);
-  const legacyRetired = schemaVersion === 3 && (isReduceOrder || isBracketParent);
+  const legacy = schemaVersion === 3;
   // V4 children become active only through an explicit on-chain binding.
   const parentPending = linkMode === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT && (schemaVersion !== 3 || parentExists);
   const currentId = position ? positionIdentity(position) : undefined;
@@ -185,12 +185,11 @@ export function analyzeV2OrderLifecycle(
     mergedOrder.position_id = currentId;
   }
   const boundId = positionIdentity(mergedOrder);
-  const positionMatches = schemaVersion === 4 && !parentPending && boundId !== undefined && currentId !== undefined && boundId === currentId;
+  const positionMatches = Boolean(position) && !parentPending && (legacy || (schemaVersion === 4 && boundId !== undefined && currentId !== undefined && boundId === currentId));
   let cleanupReason: V2OrderLifecycleState["cleanupReason"] = "";
-  if (legacyRetired && !parentPending) cleanupReason = "legacy_retired";
-  else if (schemaVersion === 4 && isReduceOrder && !parentPending && boundId !== undefined) {
+  if (isReduceOrder && !parentPending && (legacy || (schemaVersion === 4 && boundId !== undefined))) {
     if (!position) cleanupReason = "position_missing";
-    else if (currentId !== undefined && currentId !== boundId) cleanupReason = "position_replaced";
+    else if (!legacy && currentId !== undefined && currentId !== boundId) cleanupReason = "position_replaced";
   }
   const bracketStatus = bracketStatusFor(linkMode, parentPending);
   const expired = orderExpired(mergedOrder);
@@ -225,15 +224,11 @@ export function analyzeV2OrderLifecycle(
   if (expired) blockers.push("order_expired");
   if (!crossed) blockers.push("not_crossed");
   if (parentPending) blockers.push("parent_pending");
-  if (legacyRetired) {
-    blockers.push("legacy_retired");
-    staleReason = "legacy_retired";
-  }
-  if (isReduceOrder && !parentPending && !legacyRetired) {
+  if (isReduceOrder && !parentPending) {
     if (options.hypothetical && !position) {
       blockers.push("position_missing");
       staleReason = "position_missing";
-    } else if (schemaVersion !== 4 || boundId === undefined || (position && currentId === undefined)) {
+    } else if (!legacy && (schemaVersion !== 4 || boundId === undefined || (position && currentId === undefined))) {
       blockers.push("unknown_position_state");
       staleReason = "unknown_position_state";
     } else if (!position) {
@@ -324,9 +319,12 @@ function pendingReduceTotals(input: {
     const ownerOrderId = orderOwnerId(order);
     if (order !== input.additionalOrder && exclude !== undefined && ownerOrderId === exclude) continue;
     if (orderExpired(order)) continue;
-    if (input.positionId === undefined || positionIdentity(order) !== input.positionId) continue;
-    if (Number(get(order, "schema_version", "schemaVersion")) !== 4 && order !== input.additionalOrder) continue;
-    if (orderLinkMode(order) === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT) continue;
+    const legacy = Number(get(order, "schema_version", "schemaVersion")) === 3;
+    if (!legacy && (input.positionId === undefined || positionIdentity(order) !== input.positionId)) continue;
+    if (!legacy && Number(get(order, "schema_version", "schemaVersion")) !== 4 && order !== input.additionalOrder) continue;
+    if (orderLinkMode(order) === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT
+      && (!legacy || allOrders.some((parent) => orderOwnerId(parent) === orderLinkBaseOrderId(order)
+        && v2OrderKeyFromOrder(parent).key === key.key))) continue;
     const orderKind = Number(get(order, "order_kind", "orderKind"));
     const size = bigint(get(order, "size_usd_delta", "sizeUsdDelta"));
     const linkMode = orderLinkMode(order);

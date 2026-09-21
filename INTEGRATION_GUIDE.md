@@ -175,8 +175,8 @@ Use the SDK attachment helpers for entry-plus-TP/SL groups; they derive the
 same-group references. Pending bracket children bind when their entry fills.
 
 Use updated parsers for both legacy V3 and new V4 orders. Legacy TP/SL and linked
-brackets no longer protect positions after cutover and must be recreated. Keep
-orphan and legacy-retirement cancellation outcomes separate from executed trades.
+brackets keep their original coordinate matching and execution. V4 protection
+binds a specific position ID. Keep orphan cancellations separate from trades.
 Use SDK storage constants and supply the current `marketYieldRegistry` when
 building entry/increase orders so automatic cost settlement has its resources.
 If an attachment group exceeds the chain limit, do not split it silently: obtain

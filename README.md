@@ -69,9 +69,10 @@ contracts. Rebuild cached unsigned transactions and reload clients at cutover.
   [order integration notes](./INTEGRATION_GUIDE.md#position-bound-orders-050).
 - Refresh order storage funding and resource preparation through SDK helpers.
   Entry/increase order builders need the market's current yield registry.
-- Old TP/SL and linked entry brackets retire, with refunds, rather than trade.
-  Tell affected users to recreate protection; old standalone entries remain valid.
-  Treat orphan/legacy cancellation receipts as cancellations, not trading volume.
+- Existing V3 TP/SL and brackets keep their original matching and execution.
+  New V4 protection binds the specific position; proven orphans receive paid cleanup.
+  Users do not need to recreate existing protection.
+  Treat orphan cancellation receipts as cancellations, not trading volume.
 
 Existing position balances need no migration. LP and swap ABIs are unchanged.
 

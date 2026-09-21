@@ -663,6 +663,8 @@ export interface V2OpenLimitWithAttachedOrdersInput extends V2SubmitOrderInput {
 export interface V2ExecuteOrderInput extends PdexV2OrderOpsRefs, SenderInput, PositionSideInput, OracleCallArgs, V2SettlementMaintenanceOracleRefs {
   /** Preparation only. The contract independently verifies eligibility and never trusts this hint. */
   cleanup?: "orphan" | "legacy";
+  /** Stored order schema; V3 children become active once their parent is absent. */
+  schemaVersion?: number;
   keeperFeeAssetId?: BigNumberish;
   owner: AddressLike;
   ownerOrderId: BigNumberish;
@@ -2343,31 +2345,22 @@ export function buildV2ExecuteOrderCall(input: V2ExecuteOrderInput): AppCallDesc
 }
 
 function buildV2OrderCleanupCall(input: V2ExecuteOrderInput): AppCallDescriptor {
-  if (input.cleanup !== "orphan" && input.cleanup !== "legacy") throw new Error("bad order cleanup kind");
+  if (input.cleanup !== "orphan") throw new Error("legacy orders remain executable; only orphan cleanup is supported");
   const orderKind = Number(input.orderKind);
   const linkMode = Number(input.linkMode ?? V2_ORDER_LINK_MODE.STANDALONE);
-  // Validate linkage even when the target-only cleanup does not need its sibling.
-  const linkedBoxes = v2OrderExecuteLinkedBoxRefs({
+  v2OrderExecuteLinkedBoxRefs({
     owner: input.owner, ownerOrderId: input.ownerOrderId, orderKind,
     v2OrderOpsAppId: input.v2OrderOpsAppId, linkMode: input.linkMode, linkBaseOrderId: input.linkBaseOrderId,
   });
-  const isParent = linkMode === V2_ORDER_LINK_MODE.BRACKET_PARENT;
-  if (input.cleanup === "orphan" && (orderKind === V2_ORDER_KIND.OPEN_LIMIT || linkMode === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT)) {
+  if (orderKind !== V2_ORDER_KIND.DECREASE_TAKE_PROFIT && orderKind !== V2_ORDER_KIND.DECREASE_STOP_LOSS
+    || (linkMode === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT && input.schemaVersion !== 3)) {
     throw new Error("only active TP/SL can be orphan cleanup candidates");
   }
-  if (input.cleanup === "legacy" && orderKind === V2_ORDER_KIND.OPEN_LIMIT && !isParent) {
-    throw new Error("standalone legacy entries remain executable");
-  }
-  const roles: V2LargeProgramRole[] = ["order_ops"];
-  const boxes: Array<Uint8Array | [number, Uint8Array]> = [v2OrderBoxKey(input.owner, input.ownerOrderId)];
-  const foreignApps = [v2AdminControlAppId(input)];
-  if (input.cleanup === "orphan") {
-    boxes.push([input.targetTradingAppId, v2PositionBoxKey(input.owner, input.marketId, input.collateralAssetId, input.side)]);
-    foreignApps.push(input.targetTradingAppId);
-    roles.push(input.targetTradingAppId === input.v2SingleTokenTradingAppId ? "single_token_trading" : "trading");
-  } else if (isParent) {
-    boxes.push(...linkedBoxes);
-  } else if (linkMode === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT) {
+  const roles: V2LargeProgramRole[] = ["order_ops", input.targetTradingAppId === input.v2SingleTokenTradingAppId ? "single_token_trading" : "trading"];
+  const boxes: Array<Uint8Array | [number, Uint8Array]> = [v2OrderBoxKey(input.owner, input.ownerOrderId),
+    [input.targetTradingAppId, v2PositionBoxKey(input.owner, input.marketId, input.collateralAssetId, input.side)]];
+  const foreignApps = [v2AdminControlAppId(input), input.targetTradingAppId];
+  if (linkMode === V2_ORDER_LINK_MODE.CHILD_WAIT_PARENT) {
     boxes.push([v2OrderOpsAppId(input), v2OrderBoxKey(input.owner, input.linkBaseOrderId!)]);
   }
   const call = buildAppCall({
