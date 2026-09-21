@@ -170,18 +170,42 @@ clients or replace contract enforcement of market-owned liquidity.
 
 Read the current position's `position_id` and pass it as `expectedPositionId`
 when adding protection to that position, including an explicitly verified zero.
-Match displayed active protection by owner, market, collateral, side **and ID**.
+Match V4 active protection by owner, market, collateral, side **and ID**.
+Match legacy V3 protection by those coordinates without an ID comparison; a
+legacy waiting child becomes eligible after its parent is absent.
 Use the SDK attachment helpers for entry-plus-TP/SL groups; they derive the
 same-group references. Pending bracket children bind when their entry fills.
 
 Use updated parsers for both legacy V3 and new V4 orders. Legacy TP/SL and linked
 brackets keep their original coordinate matching and execution. V4 protection
-binds a specific position ID. Keep orphan cancellations separate from trades.
+binds a specific position ID. Legacy triggers may affect a reopened position at
+the same coordinates; recreating them to gain V4 binding is optional. Keep
+orphan cancellations separate from trades.
 Use SDK storage constants and supply the current `marketYieldRegistry` when
 building entry/increase orders so automatic cost settlement has its resources.
 If an attachment group exceeds the chain limit, do not split it silently: obtain
 explicit approval for an entry followed by protection, using the confirmed ID,
 and report the position as unprotected if the second step fails.
+
+### Direct closes and margin withdrawals (0.6.0)
+
+All pair and single-token decrease/close and margin-withdrawal builders require
+`expectedPositionId`, including transaction and asynchronous preparation helpers.
+Use the ID of the position the user selected, checked against current chain state:
+
+```ts
+const call = buildV2DecreaseOrCloseCall({
+  ...closeInputs,
+  expectedPositionId: selectedPosition.position_id,
+});
+```
+
+An explicitly verified zero is valid. If the selected position has been replaced,
+refresh the view and ask the user to review it; do not silently substitute the new
+ID. The signed ID also protects against a replacement after the pre-signing read.
+Omission and invalid IDs throw. The explicit `UNCHECKED_CLOSE_POSITION_ID` opt-out
+is only for intentional coordinate-only execution, never for missing state or TP/SL.
+Margin deposits and position increases do not gain a new required input.
 
 ### Already-triggered TP and SL submissions
 

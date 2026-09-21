@@ -146,8 +146,8 @@ test("the standard prepared close encodes recall without caller flags; the old o
     sizeUsdDelta: 10000000n, acceptablePrice: 91495800000n, minPrimaryOutput: 0n,
     oracleMessage: new Uint8Array(133).fill(1), oracleSignature: new Uint8Array(64).fill(2) };
   const params = { fee: 1000n, minFee: 1000n, firstValid: 1n, lastValid: 1000n, genesisID: "sdk-test", genesisHash: new Uint8Array(32) };
-  assert.throws(() => buildV2DecreaseOrCloseTransactions(args, params), /preparation is required/);
-  const group = await prepareV2DecreaseOrCloseTransactions(f.client, args, params);
+  assert.throws(() => buildV2DecreaseOrCloseTransactions({ ...args, expectedPositionId: 17n }, params), /preparation is required/);
+  const group = await prepareV2DecreaseOrCloseTransactions(f.client, { ...args, expectedPositionId: 17n }, params);
   const txn = group.find(t => t.applicationCall?.appIndex === 2002n)!;
   const encoded = txn.applicationCall!.appArgs.slice(-4, -1).map(value => BigInt(`0x${Buffer.from(value).toString("hex")}`));
   assert.deepEqual(encoded, [1n, 2000000n, 0n]);

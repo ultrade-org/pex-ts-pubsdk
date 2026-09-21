@@ -1,6 +1,9 @@
 export type BigNumberish = number | bigint | string;
 export type BytesLike = Uint8Array | number[] | string;
 
+/** Explicitly opt out of lifetime checking on a direct close or margin withdrawal. */
+export const UNCHECKED_CLOSE_POSITION_ID = (1n << 64n) - 1n;
+
 export const SIDE = {
   LONG: 1,
   SHORT: 2,

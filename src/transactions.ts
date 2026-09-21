@@ -41,6 +41,7 @@ import {
 } from "./boxes.js";
 import { concat, uint64Bytes } from "./codec.js";
 import {
+  UNCHECKED_CLOSE_POSITION_ID,
   HEAVY_METHOD_FLAT_FEE_MICRO_ALGO,
   MARKET_YIELD_ACTION_FINALIZATION_FLAT_FEE_MICRO_ALGO,
   MARKET_YIELD_ACTION_HOT_CHECK_FLAT_FEE_MICRO_ALGO,
@@ -85,6 +86,7 @@ import {
 } from "./constants.js";
 
 export {
+  UNCHECKED_CLOSE_POSITION_ID,
   HEAVY_METHOD_EXTRA_FEE_MICRO_ALGO,
   HEAVY_METHOD_FLAT_FEE_MICRO_ALGO,
   MARKET_YIELD_ACTION_FINALIZATION_FLAT_FEE_MICRO_ALGO,
@@ -533,8 +535,8 @@ export interface V2DecreaseOrCloseInput extends PdexV2AppRefs, SenderInput, V2Ma
   marketYieldRecallCount?: BigNumberish;
   flatFeeMicroAlgo?: BigNumberish;
   builderFee?: BuilderFeeInput;
-  /** Bind a direct close to a lifetime; omit only for an ordinary manual close. */
-  expectedPositionId?: BigNumberish;
+  /** Current position ID (including verified zero), or explicit UNCHECKED_CLOSE_POSITION_ID. */
+  expectedPositionId: BigNumberish;
 }
 
 export interface V2DecreaseOrCloseWithSwapInput
@@ -844,8 +846,8 @@ export interface V2SingleTokenDecreaseOrCloseInput extends PdexV2SingleTokenTrad
   maxBackingReceiptAmount?: BigNumberish;
   marketYieldRecallCount?: BigNumberish;
   flatFeeMicroAlgo?: BigNumberish;
-  /** Bind a direct close to a lifetime; omit only for an ordinary manual close. */
-  expectedPositionId?: BigNumberish;
+  /** Current position ID (including verified zero), or explicit UNCHECKED_CLOSE_POSITION_ID. */
+  expectedPositionId: BigNumberish;
 }
 
 export interface V2SingleTokenWithdrawPositionMarginInput
@@ -1403,10 +1405,10 @@ export function buildV2AddPositionMarginCall(input: V2AddPositionMarginInput): A
 }
 
 function expectedClosePositionId(value: BigNumberish | undefined): bigint {
-  if (value === undefined) return (1n << 64n) - 1n;
+  if (value === undefined) throw new Error("expectedPositionId is required for a direct close or margin withdrawal");
   if (typeof value === "string" && !/^\d+$/.test(value)) throw new Error("invalid expected position ID");
   const id = strictBigInt(value, "expected position ID");
-  if (id < 0n || id >= 1n << 48n) throw new Error("invalid expected position ID");
+  if (id !== UNCHECKED_CLOSE_POSITION_ID && (id < 0n || id >= 1n << 48n)) throw new Error("invalid expected position ID");
   return id;
 }
 

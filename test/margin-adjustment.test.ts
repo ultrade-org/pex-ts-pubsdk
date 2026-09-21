@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { UNCHECKED_CLOSE_POSITION_ID } from "../src/constants.js";
 import { decodeUint64 } from "algosdk";
 import { buildV2DecreaseOrCloseCall, buildV2SingleTokenDecreaseOrCloseCall, buildV2AddPositionMarginCall, buildV2SingleTokenAddPositionMarginCall, buildV2SingleTokenWithdrawPositionMarginCall, buildV2WithdrawPositionMarginCall } from "../src/transactions.js";
 import { planV2Flow } from "../src/planners.js";
@@ -44,6 +45,7 @@ setProtocolManifest(manifest, 2);
 
 const sender = Uint8Array.from({ length: 32 }, (_, index) => index);
 const common = {
+  expectedPositionId: 17n,
   // These descriptor fixtures explicitly select the no-recall path.
   yieldRecallMode: 0,
   v2MarketsAppId: 2001,
@@ -115,14 +117,16 @@ function methodSpec(signature: string, types: string[]) {
 
 for (const builder of [buildV2DecreaseOrCloseCall, buildV2SingleTokenDecreaseOrCloseCall,
   buildV2WithdrawPositionMarginCall, buildV2SingleTokenWithdrawPositionMarginCall]) {
-  test(`${builder.name}: direct close signs a bounded optional lifetime`, () => {
+  test(`${builder.name}: direct close requires a lifetime or explicit unchecked opt-out`, () => {
     const input = { ...common, collateralAmount: 1_000_000, sizeUsdDelta: 1_000_000, minPrimaryOutput: 0 };
-    for (const expectedPositionId of [0n, 17n, (1n << 48n) - 1n]) {
+    for (const expectedPositionId of [0n, 17n, (1n << 48n) - 1n, UNCHECKED_CLOSE_POSITION_ID]) {
       const call = builder({ ...input, expectedPositionId });
       assert.equal(decodeUint64(call.appArgs.at(-1)!, "bigint"), expectedPositionId);
     }
-    assert.equal(decodeUint64(builder(input).appArgs.at(-1)!, "bigint"), (1n << 64n) - 1n);
-    for (const invalid of [null, true, -1, 1.5, "", 1n << 48n]) {
+    const { expectedPositionId: _id, ...omitted } = input;
+    // @ts-expect-error omission must also be rejected for JavaScript callers
+    assert.throws(() => builder(omitted), /expectedPositionId is required/);
+    for (const invalid of [null, true, -1, 1.5, "", 1n << 48n, 1n << 64n, Number.MAX_SAFE_INTEGER + 1]) {
       assert.throws(() => builder({ ...input, expectedPositionId: invalid as never }));
     }
   });

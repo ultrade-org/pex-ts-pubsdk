@@ -197,7 +197,7 @@ test("pair descriptors and stored orders preserve builder authorization", () => 
     1,
   );
 
-  const close = buildV2DecreaseOrCloseCall({
+  const close = buildV2DecreaseOrCloseCall({ expectedPositionId: 17n,
     ...common,
     collateralAssetId: 12,
     side: 1,

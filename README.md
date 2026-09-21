@@ -34,26 +34,50 @@ path from configuration to a confirmed wallet transaction.
 ## Install from source
 
 Clone the repository and check out a reviewed commit or release tag so the SDK
-source is pinned. For the unreleased 0.5.0 candidate, replace the reference below
+source is pinned. For the 0.6.0 candidate, replace the reference below
 with the supplied commit; do not activate it against the older contracts:
 
 ```bash
 git clone https://github.com/ultrade-org/pex-ts-pubsdk.git
 cd pex-ts-pubsdk
-git checkout YOUR_REVIEWED_0_5_0_REF
+git checkout YOUR_REVIEWED_0_6_0_REF
 npm ci --ignore-scripts
 npm run build
 npm pack --ignore-scripts
 ```
 
-The final command creates `pdex-sdk-0.5.0.tgz`. Install that exact tarball in
+The final command creates `pdex-sdk-0.6.0.tgz`. Install that exact tarball in
 your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm install --save-exact /path/to/pdex-sdk-0.5.0.tgz --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.6.0.tgz --ignore-scripts
 ```
 
-## Updating to 0.5.0 (breaking)
+## Updating from 0.5.0 to 0.6.0
+
+- **Required:** pass the selected position's `position_id` as `expectedPositionId`
+  to direct decrease/close and margin-withdrawal builders, including the prepare,
+  transaction and output-swap variants. Verified ID zero is valid; missing data
+  must not become zero. If you already pass the ID, no call-site change is needed.
+  Omission now fails instead of silently disabling the on-chain lifetime check.
+- **Legacy orders:** V3 TP/SL and pending brackets keep working. Match them by
+  owner/market/collateral/side; apply position-ID and activation checks to V4.
+  Remove any custom V3-retirement handling. Updated SDK lifecycle helpers handle
+  this distinction. A legacy trigger can affect a reopened position at the same
+  coordinates; voluntarily recreate protection to gain V4 lifetime binding.
+- If you execute/clean up orders yourself, stop using `cleanup: "legacy"`
+  (now rejected). Use `cleanup: "orphan"` only for genuine orphans and pass the
+  stored `schemaVersion: 3` for a legacy bracket child. Updated helpers prepare
+  the required position/parent references; the contract verifies eligibility.
+- Rebuild with the updated SDK and matching protocol definitions. There are no
+  further ABI/layout changes from 0.5.0, and no new LP, swap or entry inputs.
+
+A caller deliberately choosing coordinate-only direct execution can explicitly
+pass `UNCHECKED_CLOSE_POSITION_ID`, exported from `@pdex/sdk/transactions` and
+`@pdex/sdk/constants`. This allows execution against a replacement position;
+do not use it for TP/SL or as a fallback for a failed position read.
+
+## Earlier 0.5.0 breaking changes
 
 Coordinate activation with the position-identity contract upgrade. Prepare and
 test beforehand; new transaction builders are not compatible with the older
@@ -98,7 +122,7 @@ Use `post_action_liquidatable` to assess an ADL survivor separately from
 `adl_survivor_contract_admissible`, which describes emergency admissibility.
 
 The 0.3.2 corrections introduced no new required inputs relative to 0.3.0;
-0.5.0 has the breaking changes above. From 0.2.x, also apply the
+0.5.0 and 0.6.0 have the breaking changes above. From 0.2.x, also apply the
 [recall preparation migration](./INTEGRATION_GUIDE.md#recall-preparation).
 Rebuild and regroup unsigned transactions with the updated SDK before signing.
 
