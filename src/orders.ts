@@ -1,7 +1,9 @@
-import { assignGroupID, type SuggestedParams, type Transaction } from "algosdk";
+import { type SuggestedParams, type Transaction } from "algosdk";
 import {
+  appendV2TransactionGroupTransactions,
   buildV2CancelOrderTransactions,
   buildV2DecreaseOrCloseTransactions,
+  v2TransactionGroupResult,
   SIDE,
   V2_ORDER_LINK_MODE,
   V2_ORDER_KIND,
@@ -328,16 +330,16 @@ export function planV2CancelRelatedReduceOrders(input: PdexV2OrderOpsRefs & {
   const owner = String(input.owner ?? input.sender);
   const relatedOrders = v2OrdersForPosition(owner, input.marketId, input.collateralAssetId, input.side, input.orders)
     .filter((order) => isReduceOrderKind(Number(get(order, "order_kind", "orderKind"))));
-  const cancelTxns = relatedOrders.map((order) => buildV2CancelOrderTransactions({
+  const cancelGroups = relatedOrders.map((order) => buildV2CancelOrderTransactions({
     ...input,
     sender: input.sender,
     ownerOrderId: get(order, "owner_order_id", "ownerOrderId", "order_id", "orderId"),
     collateralAssetId: get(order, "collateral_asset_id", "collateralAssetId"),
     keeperFeeAssetId: get(order, "keeper_fee_asset_id", "keeperFeeAssetId", "collateral_asset_id", "collateralAssetId"),
-  } as V2CancelOrderInput, input.suggestedParams)).flat();
+  } as V2CancelOrderInput, input.suggestedParams));
   return {
     relatedOrders,
-    groups: splitGrouped(cancelTxns),
+    groups: batchCancelGroups(cancelGroups),
     warnings: relatedOrders.length > 0 ? ["related_reduce_orders_require_owner_cancel"] : [],
   };
 }
@@ -364,7 +366,11 @@ export function planV2CloseWithOrderCleanup(input: V2DecreaseOrCloseInput & {
   }
   const firstCancelGroup = cancelPlan.groups[0] ?? [];
   if (closeGroup.length + firstCancelGroup.length <= MAX_TXN_GROUP_SIZE) {
-    const combined = regroup([...closeGroup, ...firstCancelGroup]);
+    // Composition mutates transaction group IDs; keep the standalone close valid.
+    const combined = appendV2TransactionGroupTransactions(
+      v2TransactionGroupResult(buildV2DecreaseOrCloseTransactions(input, input.suggestedParams)),
+      firstCancelGroup,
+    ).transactions;
     return {
       closeGroup,
       relatedOrders: cancelPlan.relatedOrders,
@@ -547,19 +553,19 @@ function isReduceOrderKind(orderKind: number): boolean {
   return orderKind === V2_ORDER_KIND.DECREASE_TAKE_PROFIT || orderKind === V2_ORDER_KIND.DECREASE_STOP_LOSS;
 }
 
-function splitGrouped(transactions: Transaction[]): Transaction[][] {
+function batchCancelGroups(cancelGroups: Transaction[][]): Transaction[][] {
   const groups: Transaction[][] = [];
-  for (let index = 0; index < transactions.length; index += MAX_TXN_GROUP_SIZE) {
-    groups.push(regroup(transactions.slice(index, index + MAX_TXN_GROUP_SIZE)));
+  for (const cancelGroup of cancelGroups) {
+    const previous = groups[groups.length - 1];
+    if (!previous || previous.length + cancelGroup.length > MAX_TXN_GROUP_SIZE) {
+      groups.push(cancelGroup);
+    } else {
+      groups[groups.length - 1] = appendV2TransactionGroupTransactions(
+        v2TransactionGroupResult(previous), cancelGroup,
+      ).transactions;
+    }
   }
   return groups;
-}
-
-function regroup(transactions: Transaction[]): Transaction[] {
-  if (transactions.length === 0) return [];
-  for (const txn of transactions) txn.group = undefined;
-  assignGroupID(transactions);
-  return transactions;
 }
 
 function get(record: Record<string, unknown>, ...keys: string[]): unknown {

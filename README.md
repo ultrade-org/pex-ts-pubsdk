@@ -34,24 +34,32 @@ path from configuration to a confirmed wallet transaction.
 ## Install from source
 
 Clone the repository and check out a reviewed commit or release tag so the SDK
-source is pinned. For version 0.6.1, replace the reference below with the supplied commit.
+source is pinned. For version 0.6.2, replace the reference below with the supplied commit.
 This version requires the position-identity contracts:
 
 ```bash
 git clone https://github.com/ultrade-org/pex-ts-pubsdk.git
 cd pex-ts-pubsdk
-git checkout YOUR_REVIEWED_0_6_1_REF
+git checkout YOUR_REVIEWED_0_6_2_REF
 npm ci --ignore-scripts
 npm run build
 npm pack --ignore-scripts
 ```
 
-The final command creates `pdex-sdk-0.6.1.tgz`. Install that exact tarball in
+The final command creates `pdex-sdk-0.6.2.tgz`. Install that exact tarball in
 your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm install --save-exact /path/to/pdex-sdk-0.6.1.tgz --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.6.2.tgz --ignore-scripts
 ```
+
+## Updating from 0.6.1 to 0.6.2
+
+Fixes duplicate transaction IDs when `planV2CancelRelatedReduceOrders` or
+`planV2CloseWithOrderCleanup` combines repeated budget helpers. Groups retain
+resource budgets and primary-transaction metadata; the returned `closeGroup`
+also remains independently valid. Clients using either planner should upgrade
+and rebuild. No call-site changes or contract upgrade are required.
 
 ## Updating from 0.6.0 to 0.6.1
 
