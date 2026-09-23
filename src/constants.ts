@@ -20,6 +20,31 @@ export const V2_ORDER_KIND = {
   DECREASE_TAKE_PROFIT: 2,
   DECREASE_STOP_LOSS: 3,
 } as const;
+/** Status field in order submitted/executed/cancelled receipts (decoded as bigint). */
+export const V2_ORDER_STATUS = {
+  STORED: 1,
+  EXECUTED_IMMEDIATELY: 2,
+  IOC_NOT_FILLED: 3,
+  EXECUTED: 4,
+  CANCELLED: 5,
+  EXPIRED_CANCELLED: 6,
+  /** Execution cancelled an orphan; no position was traded. */
+  POSITION_MISSING: 7,
+  /** Execution cancelled a V4 order bound to a different position lifetime. */
+  POSITION_REPLACED: 8,
+  /** Reserved historical value; not emitted by current contracts. */
+  LEGACY_RETIRED: 9,
+} as const;
+
+/** Reason field in v2_order_bracket_cleanup; child_order_id is the removed order. */
+export const V2_ORDER_BRACKET_CLEANUP_REASON = {
+  PARENT_CANCELLED: 1,
+  PARENT_EXPIRED: 2,
+  OCO_SIBLING_CANCELLED: 3,
+  /** Reserved historical value; not emitted by current contracts. */
+  PARENT_RETIRED: 4,
+} as const;
+
 export const V2_ORDER_BAD_PRICE_REASON = "bad_order_price";
 
 export const V2_ORDER_TARGET = {

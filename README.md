@@ -34,24 +34,33 @@ path from configuration to a confirmed wallet transaction.
 ## Install from source
 
 Clone the repository and check out a reviewed commit or release tag so the SDK
-source is pinned. For version 0.6.2, replace the reference below with the supplied commit.
+source is pinned. For version 0.6.3, replace the reference below with the supplied commit.
 This version requires the position-identity contracts:
 
 ```bash
 git clone https://github.com/ultrade-org/pex-ts-pubsdk.git
 cd pex-ts-pubsdk
-git checkout YOUR_REVIEWED_0_6_2_REF
+git checkout YOUR_REVIEWED_0_6_3_REF
 npm ci --ignore-scripts
 npm run build
 npm pack --ignore-scripts
 ```
 
-The final command creates `pdex-sdk-0.6.2.tgz`. Install that exact tarball in
+The final command creates `pdex-sdk-0.6.3.tgz`. Install that exact tarball in
 your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm install --save-exact /path/to/pdex-sdk-0.6.2.tgz --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.6.3.tgz --ignore-scripts
 ```
+
+## Updating from 0.6.2 to 0.6.3
+
+Adds `V2_ORDER_STATUS` and `V2_ORDER_BRACKET_CLEANUP_REASON` constants, with
+[receipt-code meanings](./INTEGRATION_GUIDE.md#order-receipt-codes), cleanup
+handling and historical values documented. This is additive: no call-site,
+receipt-format or contract changes. Decoded codes remain `bigint`; compare them
+with `BigInt(...)` of the corresponding constant. The constants also work with
+existing manifests that lack enum metadata.
 
 ## Updating from 0.6.1 to 0.6.2
 

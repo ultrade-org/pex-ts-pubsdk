@@ -288,3 +288,52 @@ Any material quote change starts a new user review.
 `submitPdexTransactionGroup()` implements steps 4 through 5 for any transaction
 array returned by a PDex builder. It rejects missing signatures, submits the
 complete group, waits for confirmation, and returns the decoded receipt.
+
+### Order receipt codes
+
+Import `V2_ORDER_STATUS` and `V2_ORDER_BRACKET_CLEANUP_REASON` from `@pdex/sdk`
+or `@pdex/sdk/constants`. Constants are numbers; decoded receipt values remain
+`bigint`, so compare with `BigInt(V2_ORDER_STATUS.POSITION_MISSING)`, for example.
+The manifest also describes these mappings in `receipts.enums`; each affected
+receipt's `field_enums` maps the field name to its registry name. Older manifests
+without this metadata still decode identically.
+
+`v2_order_bracket_cleanup` (235), `reason`:
+
+| Code | Name | Meaning |
+| --- | --- | --- |
+| 1 | `PARENT_CANCELLED` | Entry was cancelled; its attached child was removed. |
+| 2 | `PARENT_EXPIRED` | Expired entry was cancelled; its attached child was removed. |
+| 3 | `OCO_SIBLING_CANCELLED` | Linked TP/SL executed; the other child was removed. |
+| 4 | `PARENT_RETIRED` | Reserved historical value; not emitted by current contracts. |
+
+Remove the order identified by **`owner` + `child_order_id`**, not
+`base_order_id`. The receipt reports storage refund, keeper-fee refund and
+keeper-fee payment separately.
+
+`V2_ORDER_STATUS` applies to submitted (230), executed (231) and cancelled
+(232) receipts:
+
+| Code | Name | Meaning |
+| --- | --- | --- |
+| 1 | `STORED` | Resting order stored. |
+| 2 | `EXECUTED_IMMEDIATELY` | Filled during submission. |
+| 3 | `IOC_NOT_FILLED` | Immediate-or-cancel order did not fill. |
+| 4 | `EXECUTED` | Previously stored order executed. |
+| 5 | `CANCELLED` | Owner cancelled the order. |
+| 6 | `EXPIRED_CANCELLED` | Expired order cancelled. |
+| 7 | `POSITION_MISSING` | Execution attempt cancelled a reduce order whose position no longer exists. |
+| 8 | `POSITION_REPLACED` | Execution attempt cancelled a V4 reduce order whose stored position ID no longer matches. |
+| 9 | `LEGACY_RETIRED` | Reserved historical value; not emitted by current contracts. |
+
+Codes 5–9 belong to `v2_order_cancelled`. Codes **7/8 are successful cleanup,
+not fills or failed transactions**: remove `owner` + `owner_order_id`. The
+executor receives the stored keeper fee and the owner receives the storage
+refund. Cleanup requires an execution attempt; closing a position alone does
+not immediately emit these codes. Eligible orphan cleanup does not require the
+price trigger to be met. Legacy V3 orders still use coordinate matching, so code
+8 applies only to V4 orders. Owner cancellation or linked-sibling cleanup can
+remove an order before codes 7/8 are ever observed.
+
+Preserve unknown future numeric codes instead of treating them as fills or
+mapping them to a known reason.
