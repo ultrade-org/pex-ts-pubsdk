@@ -1,3 +1,6 @@
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
+
 export type ProtocolManifest = Record<string, any>;
 export type DeploymentManifest = Record<string, any>;
 
@@ -38,6 +41,67 @@ export async function loadManifestFromUrl(
   const response = await fetchImpl(`${trimSlash(baseUrl)}/v${version}/protocol`);
   if (!response.ok) throw new Error(`failed to load protocol manifest: ${response.status}`);
   return setProtocolManifest(await response.json());
+}
+
+export interface LoadManifestFromR2Options {
+  /** Artifact root, including the deployment prefix (for example, /mainnet). */
+  publicArtifactBaseUrl: string;
+  network: string;
+  fetchImpl?: typeof fetch;
+}
+
+/** Transport/HTTP failure eligible for fallback; invalid definitions never use this error. */
+export class ProtocolManifestUnavailableError extends Error {
+  override name = "ProtocolManifestUnavailableError";
+}
+
+/** Load the network's current V2 definition, verify its exact bytes, then cache it. */
+export async function loadManifestFromR2(options: LoadManifestFromR2Options): Promise<ProtocolManifest> {
+  const baseUrl = trimSlash(options.publicArtifactBaseUrl);
+  const network = options.network.trim();
+  if (!baseUrl || !/^[a-zA-Z0-9_-]+$/.test(network)) {
+    throw new Error("protocol manifest requires an artifact base URL and a network name");
+  }
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const prefix = `v2/protocol/${network}`;
+  const pointerBytes = await fetchManifestBytes(`${baseUrl}/${prefix}/current.json`, fetchImpl, "no-store");
+  const pointer = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(pointerBytes));
+  if (!isManifestRecord(pointer) || pointer.type !== "v2_protocol_manifest_current" ||
+      pointer.schema_version !== 1 || pointer.manifest_version !== 2 || pointer.network !== network ||
+      typeof pointer.artifact_hash !== "string" || !/^[0-9a-f]{64}$/.test(pointer.artifact_hash) ||
+      pointer.artifact_path !== `${prefix}/${pointer.artifact_hash}.json`) {
+    throw new Error("invalid protocol manifest pointer: unsupported format, network, or artifact path");
+  }
+  const bytes = await fetchManifestBytes(`${baseUrl}/${pointer.artifact_path}`, fetchImpl);
+  if (bytesToHex(sha256(bytes)) !== pointer.artifact_hash) {
+    throw new Error("protocol manifest hash mismatch");
+  }
+  const manifest = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  if (!isManifestRecord(manifest) || manifest.manifest_version !== 2 ||
+      !isManifestRecord(manifest.apps) || !isManifestRecord(manifest.boxes) ||
+      !isManifestRecord(manifest.receipts)) {
+    throw new Error("invalid V2 protocol manifest format");
+  }
+  return setProtocolManifest(manifest, 2);
+}
+
+function isManifestRecord(value: unknown): value is Record<string, any> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+async function fetchManifestBytes(url: string, fetchImpl: typeof fetch, cache?: RequestCache): Promise<Uint8Array> {
+  // Keep parsing/validation outside this catch: only availability errors permit fallback.
+  try {
+    const response = await fetchImpl(url, {
+      headers: { accept: "application/json" },
+      credentials: "omit",
+      ...(cache ? { cache } : {}),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return new Uint8Array(await response.arrayBuffer());
+  } catch (cause) {
+    throw new ProtocolManifestUnavailableError(`failed to fetch protocol manifest: ${url}`, { cause });
+  }
 }
 
 export function setDeploymentManifest(manifest: DeploymentManifest): DeploymentManifest {

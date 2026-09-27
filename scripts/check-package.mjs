@@ -60,6 +60,7 @@ const expectedTestFiles = [
   "funding-recipient-split.test.ts",
   "integration.test.ts",
   "lp-swap-recall.test.ts",
+  "manifest-r2.test.ts",
   "margin-adjustment.test.ts",
   "oracle-consumption.test.ts",
   "order-cleanup-groups.test.ts",

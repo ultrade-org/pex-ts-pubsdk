@@ -21,15 +21,18 @@ const pdex = createPdexApiClient({
 
 Use the MainNet artifact URL and builder-owned API/node settings in
 [Configuration](./BACKEND_INTEGRATION.md#configuration).
-`publicArtifactBaseUrl` enables latest-price and signed-oracle bundle reads.
+`publicArtifactBaseUrl` with `network` enables protocol, latest-price and
+signed-oracle bundle reads.
 Oracle payload reads can fall back to your configured backend; latest-price
 artifact errors fail the read. No fallback selects a PEX-operated backend.
 
 ## 2. Load protocol resources
 
-Obtain and pin the public protocol definition using
-[Protocol definitions from R2](./BACKEND_INTEGRATION.md#protocol-definitions-from-r2).
-Your backend serves that copy through its `/v2/protocol` route.
+With both artifact settings, `loadProtocol()` reads and verifies R2
+[protocol definitions](./BACKEND_INTEGRATION.md#protocol-definitions-from-r2)
+first, falling back to your `/v2/protocol` only on availability failures.
+Invalid definitions fail without fallback. Without both settings it uses your API.
+For direct loading without an API client, use `loadManifestFromR2()`.
 
 Most browser applications can replace the separate setup calls with:
 

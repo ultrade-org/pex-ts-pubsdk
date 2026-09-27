@@ -6,7 +6,7 @@ by their product. Do not point `baseUrl` at a PEX-operated API or implement your
 backend by proxying that API. PEX publishes the signed oracle/price feed and versioned protocol definitions
 on R2; neither requires access to a PEX-operated backend.
 
-Version 0.5.0 does **not** include a standalone backend server or a complete
+This SDK does **not** include a standalone backend server or a complete
 chain-indexing implementation. Configuring `baseUrl` does not create those
 services. Build the required data endpoints before following the browser
 quickstart. You can alternatively supply chain-derived inputs directly to the
@@ -44,57 +44,49 @@ MainNet's current protocol pointer is:
 https://pub-1e72beea87f04ebfafce248132310425.r2.dev/mainnet/v2/protocol/mainnet/current.json
 ```
 
-Fetch the pointer with `cache: "no-store"`. It identifies an immutable JSON
-object by `artifact_path` (relative to the MainNet artifact base URL above)
-and `artifact_hash` (SHA-256 of the downloaded bytes). The object is the full
-protocol manifest, including method signatures, box formats and receipt enums.
-It is published by the release process after compatibility checks.
-
-Example preparation on your Node.js backend:
+Use the SDK in a browser or Node.js, without a backend request:
 
 ```ts
-import { createHash } from "node:crypto";
+import { loadManifestFromR2 } from "@pdex/sdk/manifest";
 
-const base = "https://pub-1e72beea87f04ebfafce248132310425.r2.dev/mainnet";
-const pointerResponse = await fetch(`${base}/v2/protocol/mainnet/current.json`, {
-  cache: "no-store",
+const protocol = await loadManifestFromR2({
+  publicArtifactBaseUrl: "https://pub-1e72beea87f04ebfafce248132310425.r2.dev/mainnet",
+  network: "mainnet",
 });
-if (!pointerResponse.ok) throw new Error("Protocol pointer unavailable");
-const pointer = await pointerResponse.json();
-if (pointer.network !== "mainnet" || pointer.manifest_version !== 2 ||
-    !/^[0-9a-f]{64}$/.test(pointer.artifact_hash) ||
-    pointer.artifact_path !== `v2/protocol/mainnet/${pointer.artifact_hash}.json`) {
-  throw new Error("Invalid protocol pointer");
-}
-const response = await fetch(`${base}/${pointer.artifact_path}`);
-if (!response.ok) throw new Error("Protocol manifest unavailable");
-const bytes = new Uint8Array(await response.arrayBuffer());
-if (createHash("sha256").update(bytes).digest("hex") !== pointer.artifact_hash) {
-  throw new Error("Protocol manifest hash mismatch");
-}
-const protocol = JSON.parse(new TextDecoder().decode(bytes));
-if (protocol.manifest_version !== 2) throw new Error("Unsupported protocol manifest");
-// Persist/pin these bytes and their hash, and serve protocol at your /v2/protocol.
+// The verified definition is now installed for SDK parsing and transaction building.
 ```
 
-Keep using the reviewed, pinned copy until you deliberately adopt an update;
-cache/availability failures should not silently select another network or an
-unverified definition. The hash detects corruption and identifies the version;
-the HTTPS publication origin remains trusted. This metadata is separate from
-signed oracle payloads.
+The helper refreshes `v2/protocol/{network}/current.json` with `cache: "no-store"`,
+checks its format and network, follows its immutable `artifact_path`, and verifies
+SHA-256 against `artifact_hash` over the exact downloaded bytes before caching
+the V2 manifest. The hash detects corruption and identifies the version; the
+HTTPS publication origin remains trusted. This is separate from signed oracle
+payloads. You can inject `fetchImpl` for your environment.
 
-`loadPdexContext()` and `PdexApiClient.loadProtocol()` still read **your**
-`/v2/protocol`; serve the pinned copy there. For direct SDK builders without
-the API client, initialize with `setProtocolManifest(protocol, 2)` from
-`@pdex/sdk/manifest`. No SDK runtime upgrade is needed to consume this format.
+`PdexApiClient.loadProtocol()` and `loadPdexContext()` use this helper when both
+`publicArtifactBaseUrl` and `network` are configured. They fall back to **your**
+`baseUrl`'s `/v2/protocol` only on network/body-read or HTTP failures. They never
+select a PEX-operated API automatically. Invalid JSON, format, network, artifact
+path, or hash fails without fallback; unsuccessful loading leaves the previous
+cached definition unchanged. R2 requests do not receive account credentials.
+The standalone helper has no fallback and throws `ProtocolManifestUnavailableError`
+for availability failures.
+
+Serve a compatible, reviewed definition on your fallback API and keep its
+network aligned with the artifact settings. Definitions come from the release
+process; app/asset IDs and current state still come from your own infrastructure.
+If you deliberately pin a reviewed definition, use `setProtocolManifest(protocol, 2)`
+or the existing API-only `loadManifestFromUrl(baseUrl)`. The current-pointer
+loader intentionally follows releases rather than pinning one forever.
 
 ## Minimum context API
 
-`loadPdexContext()` calls the following endpoints on **your** `baseUrl`:
+`loadPdexContext()` uses the following endpoints on **your** `baseUrl`; the
+protocol route is only a fallback when R2 loading is configured:
 
 | Method and route | Required data |
 | --- | --- |
-| `GET /v2/protocol` | Current public V2 definitions: app methods, argument types, box and receipt formats, constants and version context. |
+| `GET /v2/protocol` | Fallback (or API-only) public V2 definitions: app methods, argument types, box and receipt formats, constants and version context. |
 | `GET /v2/networks/mainnet/deployments` | Network/deployment metadata with active app and asset mappings. |
 | `GET /v2/sdk/bootstrap` | App references, assets and supported market capabilities. |
 | `GET /v2/sdk/resources` | Current app/asset and transaction resource metadata. |

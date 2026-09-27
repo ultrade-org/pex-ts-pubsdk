@@ -15,7 +15,7 @@ decode or verify it, and pass its bytes unchanged to transaction builders.
 | --- | --- |
 | `@pdex/sdk` | Convenient root exports for the complete integration surface. |
 | `@pdex/sdk/api` | Backend data, account sessions, quotes, oracle payloads, performance, and pagination. |
-| `@pdex/sdk/manifest` | Protocol and deployment manifest loading and app/asset resolution. |
+| `@pdex/sdk/manifest` | Protocol loading from R2 with hash verification or a configured API, deployment loading, and app/asset resolution. |
 | `@pdex/sdk/constants` | Protocol units, flags, fees, storage amounts, action enums, `V2_ORDER_STATUS` and `V2_ORDER_BRACKET_CLEANUP_REASON`. |
 | `@pdex/sdk/oracle` | Price12 conversion, signed-payload decoding, validation, and signature verification. |
 | `@pdex/sdk/boxes` | Box keys and typed V2 state parsers. |

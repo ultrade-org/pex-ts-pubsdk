@@ -1,4 +1,4 @@
-import { setProtocolManifest, type ProtocolManifest } from "./manifest.js";
+import { loadManifestFromR2, ProtocolManifestUnavailableError, setProtocolManifest, type ProtocolManifest } from "./manifest.js";
 import {
   ORACLE_PRICE_SCALE,
   V2_ORACLE_MESSAGE_VERSION,
@@ -333,6 +333,22 @@ export class PdexApiClient {
 
   async loadProtocol(version = 2): Promise<ProtocolManifest> {
     if (Number(version) !== 2) throw new Error("PDex API client only supports the V2 protocol manifest");
+    if (this.publicArtifactBaseUrl && this.network) {
+      try {
+        return await loadManifestFromR2({
+          publicArtifactBaseUrl: this.publicArtifactBaseUrl,
+          network: this.network,
+          fetchImpl: this.fetchImpl,
+        });
+      } catch (error) {
+        if (!(error instanceof ProtocolManifestUnavailableError)) throw error;
+        try {
+          return setProtocolManifest(await this.get<ProtocolManifest>(`/v${version}/protocol`), version);
+        } catch (apiError) {
+          throw new AggregateError([error, apiError], "protocol manifest unavailable from R2 and the configured API");
+        }
+      }
+    }
     const manifest = await this.get<ProtocolManifest>(`/v${version}/protocol`);
     return setProtocolManifest(manifest, version);
   }

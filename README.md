@@ -34,24 +34,38 @@ path from configuration to a confirmed wallet transaction.
 ## Install from source
 
 Clone the repository and check out a reviewed commit or release tag so the SDK
-source is pinned. For version 0.6.4, replace the reference below with the supplied commit.
+source is pinned. For version 0.6.5, replace the reference below with the supplied commit.
 This version requires the position-identity contracts:
 
 ```bash
 git clone https://github.com/ultrade-org/pex-ts-pubsdk.git
 cd pex-ts-pubsdk
-git checkout YOUR_REVIEWED_0_6_4_REF
+git checkout YOUR_REVIEWED_0_6_5_REF
 npm ci --ignore-scripts
 npm run build
 npm pack --ignore-scripts
 ```
 
-The final command creates `pdex-sdk-0.6.4.tgz`. Install that exact tarball in
+The final command creates `pdex-sdk-0.6.5.tgz`. Install that exact tarball in
 your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm install --save-exact /path/to/pdex-sdk-0.6.4.tgz --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.6.5.tgz --ignore-scripts
 ```
+
+## Updating from 0.6.4 to 0.6.5
+
+Adds `loadManifestFromR2({ publicArtifactBaseUrl, network })` for direct,
+hash-verified protocol loading in browsers or Node.js. No API client is required.
+
+When both artifact settings are configured, `PdexApiClient.loadProtocol()`
+(and `loadPdexContext()`) now tries R2 first. Network/HTTP failures fall back
+only to your configured `baseUrl`; invalid JSON, format, network, path or hash
+fails without fallback. Without both settings, API loading is unchanged.
+If you deliberately pin definitions, continue using `setProtocolManifest()`
+or the API-only `loadManifestFromUrl()` instead of loading R2's current version.
+No contract or backend deployment is required. See
+[protocol loading](./BACKEND_INTEGRATION.md#protocol-definitions-from-r2).
 
 ## Updating from 0.6.3 to 0.6.4
 
