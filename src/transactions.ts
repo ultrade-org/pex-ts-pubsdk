@@ -607,7 +607,9 @@ export interface V2SubmitOrderInput extends PdexV2OrderOpsRefs, SenderInput, Pos
   outputSwapMode?: BigNumberish;
   minPrimaryOutputAmount?: BigNumberish;
   minSecondaryOutputAmount?: BigNumberish;
+  /** TIME_IN_FORCE: GTC=1, GTD=2, IOC=3. Linked orders only allow GTC/GTD. */
   timeInForce: BigNumberish;
+  /** GTD deadline in Unix seconds, bounded by the current on-chain order policy. */
   expiryTime?: BigNumberish;
   storagePaymentMicroAlgo?: BigNumberish;
   flatFeeMicroAlgo?: BigNumberish;
@@ -630,6 +632,7 @@ export interface V2AttachedOrderLegInput {
   outputSwapMode?: BigNumberish;
   minPrimaryOutputAmount?: BigNumberish;
   minSecondaryOutputAmount?: BigNumberish;
+  /** GTC=1 or GTD=2; defaults to childTimeInForce, then GTC. Zero and IOC are invalid. */
   timeInForce?: BigNumberish;
   expiryTime?: BigNumberish;
   oracleMessage?: BytesLike;
@@ -1974,7 +1977,18 @@ function v2OrderTradingRoles(targetKind: number): V2LargeProgramRole[] {
   return ["order_ops", "markets", targetKind === V2_ORDER_TARGET.SINGLE_TOKEN ? "single_token_trading" : "trading"];
 }
 
+function assertV2OrderTimeInForce(value: BigNumberish, linked: boolean): void {
+  const tif = strictBigInt(value, "timeInForce");
+  if (tif < BigInt(TIME_IN_FORCE.GTC) || tif > BigInt(TIME_IN_FORCE.IOC)) {
+    throw new RangeError("timeInForce must be GTC (1), GTD (2), or IOC (3); zero is not valid");
+  }
+  if (linked && tif === BigInt(TIME_IN_FORCE.IOC)) {
+    throw new RangeError("linked orders require timeInForce GTC (1) or GTD (2); IOC (3) is not supported");
+  }
+}
+
 export function buildV2SubmitOrderCall(input: V2SubmitOrderInput): AppCallDescriptor {
+  assertV2OrderTimeInForce(input.timeInForce, false);
   const binding = v2OrderSubmissionBinding(input);
   const targetKind = Number(input.targetKind);
   const [builderAddress, builderFeeBps] = normalizeBuilderFee(
@@ -2091,6 +2105,7 @@ function assertV2DecreaseOrderMarketAssets(
 }
 
 export function buildV2SubmitLinkedOrderCall(input: V2SubmitLinkedOrderInput): AppCallDescriptor {
+  assertV2OrderTimeInForce(input.timeInForce, true);
   const binding = v2OrderSubmissionBinding(input);
   const targetKind = Number(input.targetKind);
   const [builderAddress, builderFeeBps] = normalizeBuilderFee(

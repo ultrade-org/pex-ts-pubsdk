@@ -187,6 +187,125 @@ If an attachment group exceeds the chain limit, do not split it silently: obtain
 explicit approval for an entry followed by protection, using the confirmed ID,
 and report the position as unprotected if the second step fails.
 
+### Building TP/SL orders
+
+Choose the helper that matches the user's action:
+
+| Action | Helper | Position binding |
+| --- | --- | --- |
+| Market entry/increase plus TP/SL, atomically | `buildV2MarketOpenWithAttachedOrdersTransactions` | SDK derives the entry offset; contract binds the actual resulting position. |
+| Limit entry plus bracket TP/SL | `buildV2OpenLimitWithAttachedOrdersTransactions` | Children wait for the entry to fill, then bind its position. An immediately filled entry binds in the same group. |
+| Add TP/SL to an already-open position | `buildV2ActiveAttachedOrdersTransactions` | Supply its freshly read `expectedPositionId`. No entry transaction is created. |
+
+**Time in force is not zero-based.** Import `TIME_IN_FORCE` from
+`@pdex/sdk/constants`: `GTC = 1`, `GTD = 2`, `IOC = 3`. Linked orders (including
+bracket entries and both children) allow only GTC or GTD. Standalone
+`buildV2SubmitOrderTransactions` also supports IOC. Invalid values throw during
+construction in 0.6.4; `0` never means GTC.
+
+Each child's setting is resolved as `leg.timeInForce ?? childTimeInForce ??
+TIME_IN_FORCE.GTC`. The limit parent's `timeInForce` does **not** become the
+child default. Set both deliberately when needed. GTD requires `expiryTime`
+(or `childExpiryTime` for children) in **Unix seconds**, later than the current
+chain timestamp and within the current `max_gtd_expiry_seconds` policy. The
+contract checks that deadline at submission; the SDK's enum check does not
+certify that an expiry is valid. GTC can use expiry zero.
+
+For a pair-market entry, obtain **two separately targeted published oracle
+payloads**. The entry uses Trading; each child uses OrderOps. Never reuse the
+Trading payload for an OrderOps call. Fetch these through your configured
+client's R2 oracle source; do not create or alter signed payloads.
+
+```ts
+import {
+  buildV2MarketOpenWithAttachedOrdersTransactions,
+  V2_ORDER_TARGET,
+} from "@pdex/sdk/transactions";
+import { TIME_IN_FORCE } from "@pdex/sdk/constants";
+
+// entryInputs: your prepared market-entry inputs, including sender, manifest,
+// current deployment app IDs, market/asset IDs, side, collateral, size,
+// acceptable entry price, and current marketYieldRegistry.
+// tp/slTriggerPrice and tp/slAcceptablePrice: the user's validated Price12 values.
+// keeperFeeRaw: per-child fee in collateral token base units, meeting current policy.
+const entryOracle = await pdex.v2OracleArgs({
+  marketId: entryInputs.marketId,
+  appId: entryInputs.v2TradingAppId,
+  target: "trading",
+});
+const orderOracle = await pdex.v2OracleArgs({
+  marketId: entryInputs.marketId,
+  appId: entryInputs.v2OrderOpsAppId,
+  target: "order_ops",
+});
+const childOracle = {
+  oracleMessage: orderOracle.message,
+  oracleSignature: orderOracle.signature,
+};
+const protection = {
+  baseOrderId: unusedBaseOrderId,
+  childTimeInForce: TIME_IN_FORCE.GTC,
+  childKeeperFeeAmount: keeperFeeRaw,
+  takeProfit: {
+    ...childOracle,
+    triggerPrice: tpTriggerPrice,
+    acceptablePrice: tpAcceptablePrice,
+    sizeUsdDelta: protectedSizeUsd,
+  },
+  stopLoss: {
+    ...childOracle,
+    triggerPrice: slTriggerPrice,
+    acceptablePrice: slAcceptablePrice,
+    sizeUsdDelta: protectedSizeUsd,
+  },
+};
+const transactions = buildV2MarketOpenWithAttachedOrdersTransactions({
+  ...entryInputs,
+  ...protection,
+  targetKind: V2_ORDER_TARGET.PAIR,
+  oracleMessage: entryOracle.message,
+  oracleSignature: entryOracle.signature,
+}, suggestedParams);
+```
+
+For an existing position, use `buildV2ActiveAttachedOrdersTransactions` with
+its matching owner/market/collateral/side, `expectedPositionId:
+selectedPosition.position_id`, and the same `protection` fields. Supply the
+OrderOps oracle at the top level too. Do not guess the ID or substitute zero
+for an unsuccessful read. For a limit entry, use
+`buildV2OpenLimitWithAttachedOrdersTransactions` with your prepared limit-order
+inputs, top-level OrderOps oracle, explicit parent `timeInForce`, and the same
+`protection` fields. Let the helper set child IDs, link modes and offsets;
+never hand-set these to imitate another flow. Single-token entries use
+`V2_ORDER_TARGET.SINGLE_TOKEN`, their backing asset and SingleTokenTrading
+oracle for the entry; children still use OrderOps.
+
+Required preparation details:
+
+- Reserve an unused base ID for the owner and its two child IDs: TP = base + 1,
+  SL = base + 2. Include only the requested leg(s). Keep each child's requested
+  reduction within the intended position size; the default is the input
+  `sizeUsdDelta`, which may only be the increase amount on an existing position.
+- Prices use Price12 (`1 USD = 10^12`); size uses micro-USD (`1 USD = 10^6`).
+  Amounts/keeper fees use token base units. Use bigint or decimal strings.
+- Long TP triggers at index minimum **>=** trigger; long SL at **<=** trigger.
+  Short TP triggers at index maximum **<=** trigger; short SL at **>=** trigger.
+  Both long reductions require acceptable price **<=** trigger; both short
+  reductions require acceptable price **>=** trigger. Acceptable price is the
+  user's execution limit; a crossed trigger alone does not guarantee a fill.
+- Fund each child's keeper fee in its collateral asset according to current
+  order policy. Keep SDK storage/fee defaults unless you have a verified reason
+  to override them. There is no separate OrderOps user-registration step; the
+  helper includes escrow transfers, storage funding and resource carriers.
+- Simulate the **complete returned group**, then sign and submit it atomically.
+  Preserve its order and grouping; refresh expired oracle payloads and rebuild.
+  Do not silently submit an unprotected entry after an attachment build failure.
+  Confirm receipts and stored orders before displaying protection as active.
+
+Active linked children are stored for keeper execution even if already crossed.
+Standalone TP/SL submissions have different immediate-execution behavior; see
+[Already-triggered TP and SL submissions](#already-triggered-tp-and-sl-submissions).
+
 ### Direct closes and margin withdrawals (0.6.0)
 
 All pair and single-token decrease/close and margin-withdrawal builders require
@@ -227,6 +346,66 @@ decision during wallet signing. Keeper `execute_order` must prepare its own
 fresh recall plan. Active linked child TP/SL orders are stored even when
 crossed and use this keeper path. Do not assume that passing recall resources
 alone adds recall authorization to standalone submission.
+
+### Dynamic OI margin configuration (`doi:`)
+
+The canonical manifest entry is `boxes.formats.dynamic_oi_margin_config`.
+If your cached manifest predates this entry, add the following entry to its
+`boxes.formats` object. This documents an existing layout, not an on-chain
+migration. Pin it with the SDK version in your backend.
+
+```json
+{
+  "dynamic_oi_margin_config": {
+    "example_key_size": 12,
+    "example_mbr_microalgos": 20100,
+    "fields": [
+      {
+        "name": "version",
+        "size": 8,
+        "type": "uint64"
+      },
+      {
+        "name": "flags",
+        "size": 8,
+        "type": "uint64"
+      },
+      {
+        "name": "long_factor",
+        "size": 8,
+        "type": "uint64"
+      },
+      {
+        "name": "short_factor",
+        "size": 8,
+        "type": "uint64"
+      }
+    ],
+    "key_parts": [
+      "prefix",
+      "market_id:uint64"
+    ],
+    "owner_app": "PDexV2TradingRiskOps",
+    "prefix_hex": "646f693a",
+    "value_size": 32,
+    "value_type": "DynamicOiMarginConfigV1"
+  }
+}
+```
+
+Read from **PDexV2TradingRiskOps**, using `v2DynamicOiMarginBoxKey(marketId)`
+from `@pdex/sdk/boxes`. The key is ASCII `doi:` followed by the market ID as
+an 8-byte big-endian uint64. Decode with `decodeV2DynamicOiMarginConfig` from
+`@pdex/sdk/v2Risk`; it validates the length, version and flags.
+
+The 32-byte value contains four big-endian uint64s: `version` at offset 0,
+`flags` at 8, `long_factor` at 16, and `short_factor` at 24. Version is 1;
+flags 0 disables the feature and requires zero factors; flags 1 enables it
+and requires at least one nonzero factor. Factors use scale `10^12`, not raw
+basis points: dynamic margin bps is
+`min(10000, floor(side_oi_after_micro_usd * side_factor / 10^12))`.
+The effective initial margin is the greater of the base requirement and this
+value. Use the SDK's risk calculations; do not reinterpret an unknown version.
 
 ## 6. Fetch signed oracle data
 

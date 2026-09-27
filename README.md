@@ -34,24 +34,38 @@ path from configuration to a confirmed wallet transaction.
 ## Install from source
 
 Clone the repository and check out a reviewed commit or release tag so the SDK
-source is pinned. For version 0.6.3, replace the reference below with the supplied commit.
+source is pinned. For version 0.6.4, replace the reference below with the supplied commit.
 This version requires the position-identity contracts:
 
 ```bash
 git clone https://github.com/ultrade-org/pex-ts-pubsdk.git
 cd pex-ts-pubsdk
-git checkout YOUR_REVIEWED_0_6_3_REF
+git checkout YOUR_REVIEWED_0_6_4_REF
 npm ci --ignore-scripts
 npm run build
 npm pack --ignore-scripts
 ```
 
-The final command creates `pdex-sdk-0.6.3.tgz`. Install that exact tarball in
+The final command creates `pdex-sdk-0.6.4.tgz`. Install that exact tarball in
 your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm install --save-exact /path/to/pdex-sdk-0.6.3.tgz --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.6.4.tgz --ignore-scripts
 ```
+
+## Updating from 0.6.3 to 0.6.4
+
+Order builders now reject invalid `timeInForce` before signing: GTC is **1**,
+GTD is **2**, IOC is **3**; zero is invalid. Linked/bracket orders accept only
+GTC/GTD. Replace any zero or IOC child settings with the intended supported
+policy. Omitted child settings still default to GTC; valid inputs are unchanged.
+No contract upgrade is required.
+
+See the [TP/SL construction guide](./INTEGRATION_GUIDE.md#building-tpsl-orders)
+for all three attachment flows, app-specific oracle payloads and position binding.
+The guide also includes the canonical
+[`doi:` manifest entry](./INTEGRATION_GUIDE.md#dynamic-oi-margin-configuration-doi)
+for backends with older manifests. The existing SDK decoder is unchanged.
 
 ## Updating from 0.6.2 to 0.6.3
 

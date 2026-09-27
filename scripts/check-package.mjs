@@ -63,6 +63,7 @@ const expectedTestFiles = [
   "margin-adjustment.test.ts",
   "oracle-consumption.test.ts",
   "order-cleanup-groups.test.ts",
+  "order-submission-validation.test.ts",
   "position-identity-lifecycle.test.ts",
   "position-token-precision.test.ts",
   "position-resolution-simulation.test.ts",
