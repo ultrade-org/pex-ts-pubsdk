@@ -3,8 +3,8 @@
 This package is the frontend SDK. Builders operate their own compatible HTTP
 API, Algorand node or node gateway, and any indexing/database services needed
 by their product. Do not point `baseUrl` at a PEX-operated API or implement your
-backend by proxying that API. The externally supplied PEX service used by this
-integration is the published R2 oracle/price feed.
+backend by proxying that API. PEX publishes the signed oracle/price feed and versioned protocol definitions
+on R2; neither requires access to a PEX-operated backend.
 
 Version 0.5.0 does **not** include a standalone backend server or a complete
 chain-indexing implementation. Configuring `baseUrl` does not create those
@@ -21,7 +21,7 @@ Example browser build settings for MainNet:
 # Replace these two example origins with infrastructure you operate.
 VITE_BUILDER_API_URL=https://api.your-app.example
 VITE_BUILDER_ALGOD_URL=https://algod.your-app.example
-# PEX's published MainNet oracle/price artifacts; no private credential.
+# PEX's published MainNet oracle/price and protocol artifacts; no private credential.
 VITE_PDEX_ARTIFACT_URL=https://pub-1e72beea87f04ebfafce248132310425.r2.dev/mainnet
 ```
 
@@ -35,6 +35,58 @@ Set `network: "mainnet"` consistently in bootstrap and account authentication.
 Obtain genesis information from your node. Resolve active app/asset IDs from
 verified deployment configuration and on-chain registry state rather than
 assuming that an example market or old app ID is still current.
+
+## Protocol definitions from R2
+
+MainNet's current protocol pointer is:
+
+```text
+https://pub-1e72beea87f04ebfafce248132310425.r2.dev/mainnet/v2/protocol/mainnet/current.json
+```
+
+Fetch the pointer with `cache: "no-store"`. It identifies an immutable JSON
+object by `artifact_path` (relative to the MainNet artifact base URL above)
+and `artifact_hash` (SHA-256 of the downloaded bytes). The object is the full
+protocol manifest, including method signatures, box formats and receipt enums.
+It is published by the release process after compatibility checks.
+
+Example preparation on your Node.js backend:
+
+```ts
+import { createHash } from "node:crypto";
+
+const base = "https://pub-1e72beea87f04ebfafce248132310425.r2.dev/mainnet";
+const pointerResponse = await fetch(`${base}/v2/protocol/mainnet/current.json`, {
+  cache: "no-store",
+});
+if (!pointerResponse.ok) throw new Error("Protocol pointer unavailable");
+const pointer = await pointerResponse.json();
+if (pointer.network !== "mainnet" || pointer.manifest_version !== 2 ||
+    !/^[0-9a-f]{64}$/.test(pointer.artifact_hash) ||
+    pointer.artifact_path !== `v2/protocol/mainnet/${pointer.artifact_hash}.json`) {
+  throw new Error("Invalid protocol pointer");
+}
+const response = await fetch(`${base}/${pointer.artifact_path}`);
+if (!response.ok) throw new Error("Protocol manifest unavailable");
+const bytes = new Uint8Array(await response.arrayBuffer());
+if (createHash("sha256").update(bytes).digest("hex") !== pointer.artifact_hash) {
+  throw new Error("Protocol manifest hash mismatch");
+}
+const protocol = JSON.parse(new TextDecoder().decode(bytes));
+if (protocol.manifest_version !== 2) throw new Error("Unsupported protocol manifest");
+// Persist/pin these bytes and their hash, and serve protocol at your /v2/protocol.
+```
+
+Keep using the reviewed, pinned copy until you deliberately adopt an update;
+cache/availability failures should not silently select another network or an
+unverified definition. The hash detects corruption and identifies the version;
+the HTTPS publication origin remains trusted. This metadata is separate from
+signed oracle payloads.
+
+`loadPdexContext()` and `PdexApiClient.loadProtocol()` still read **your**
+`/v2/protocol`; serve the pinned copy there. For direct SDK builders without
+the API client, initialize with `setProtocolManifest(protocol, 2)` from
+`@pdex/sdk/manifest`. No SDK runtime upgrade is needed to consume this format.
 
 ## Minimum context API
 

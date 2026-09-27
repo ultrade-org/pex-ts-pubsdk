@@ -5,7 +5,7 @@ wallet experiences on PDex V2.
 
 **Bring your own backend and node.** This is a frontend SDK, not a standalone
 backend. Builders provide the compatible data API and chain infrastructure;
-PEX provides the published R2 oracle/price feed. Do not use or proxy a
+PEX provides the published R2 oracle/price feed and protocol definitions. Do not use or proxy a
 PEX-operated backend API. See [backend integration](./BACKEND_INTEGRATION.md)
 for the required services and current limitations.
 

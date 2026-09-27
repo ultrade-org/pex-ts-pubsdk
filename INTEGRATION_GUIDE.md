@@ -27,6 +27,10 @@ artifact errors fail the read. No fallback selects a PEX-operated backend.
 
 ## 2. Load protocol resources
 
+Obtain and pin the public protocol definition using
+[Protocol definitions from R2](./BACKEND_INTEGRATION.md#protocol-definitions-from-r2).
+Your backend serves that copy through its `/v2/protocol` route.
+
 Most browser applications can replace the separate setup calls with:
 
 ```ts
