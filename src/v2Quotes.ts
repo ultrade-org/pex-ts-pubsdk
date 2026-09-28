@@ -2570,9 +2570,11 @@ function quoteV2CloseLike(input: {
     }
   }
   let payoutUsd = effectiveProfitUsd + impactPositive;
-  let costUsd = lossUsd + impactNegative;
+  // Collectible costs were already settled into collateral. A deficit close
+  // instead pays this slice's accrued costs from its realized close value.
+  let costUsd = lossUsd + impactNegative + forcedAccruedCostUsd;
   if (input.liquidation || adl) {
-    costUsd += closeFeeUsd + forcedAccruedCostUsd;
+    costUsd += closeFeeUsd;
   }
   let payoutAssetId = 0n;
   let payoutAmount = 0n;

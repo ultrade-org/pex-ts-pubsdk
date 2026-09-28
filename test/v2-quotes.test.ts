@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
+import { encodeAddress } from "algosdk";
 import {
   V2_MATH_RESOURCE_CARRIER_FLAT_FEE_MICRO_ALGO,
   V2_ROUTE_SWAP_METHOD_FLAT_FEE_MICRO_ALGO,
@@ -1672,6 +1673,152 @@ test("V2 quote settlement assigns the combined conversion residual", () => {
   assert.equal(quote.settlement_collateral_decrease, 1n);
 });
 
+test("V2 deficit decreases charge slice costs before fees and preserve remaining debt", () => {
+  for (const [size, credit, fee, output, remaining] of [
+    [50_000_000n, 5_000_000n, 50_000n, 4_900_000n, 0n],
+    [25_000_000n, 2_500_000n, 25_000n, 2_450_000n, 4_975_000n],
+    [12_500_000n, 1_250_000n, 12_500n, 1_225_000n, 7_462_500n],
+  ]) {
+    const input = deficitCloseInput(size);
+    const quote = quoteV2DecreasePosition(input);
+    assert.equal(quote.ok, true, String(quote.failure_reasons));
+    assert.equal(quote.cost_deficit, true);
+    assert.equal(quote.accrued_position_cost_usd, size * 3n / 10n);
+    assert.equal(quote.pool_credit_amount, credit);
+    assert.equal(quote.fee_amount, fee);
+    assert.equal(quote.primary_output_amount, output);
+    assert.equal(quote.pnl_output_amount, 0n);
+    assert.equal(quote.remaining_collateral, remaining);
+    assert.equal(quote.claimable_long_token_output, size / 50_000n);
+    assert.equal(quote.remaining_snapshot_mode, remaining ? "UNSETTLED_SLICE" : "FULL_DELETE");
+
+    const builder = quoteV2DecreasePosition({
+      ...input,
+      builderFee: { builderAddress: encodeAddress(new Uint8Array(32).fill(1)), builderFeeBps: 10n },
+    });
+    assert.equal(builder.ok, true, String(builder.failure_reasons));
+    assert.equal(builder.collateral_output_before_builder_fee, output);
+    assert.equal(builder.builder_fee_paid, fee);
+    assert.equal(builder.primary_output_amount, output - fee);
+
+    if (size === 25_000_000n) {
+      const last = quoteV2DecreasePosition({
+        ...input,
+        market: { ...input.market, long_oi_usd_with_short_collateral: size, long_oi_tokens_with_short_collateral: 500_000n },
+        position: { ...input.position, size_usd: size, size_tokens: 500_000n, collateral_amount: remaining },
+      });
+      assert.equal(last.ok, true, String(last.failure_reasons));
+      assert.equal(last.accrued_position_cost_usd, 7_500_000n);
+      assert.equal(last.primary_output_amount, 2_450_000n);
+      assert.equal(last.remaining_size, 0n);
+    }
+  }
+});
+
+test("V2 single-token deficit decreases deduct accrued costs for ASA and native backing", () => {
+  for (const backing of [USDC, 0n]) {
+    const input = deficitCloseInput(50_000_000n);
+    const quote = quoteV2SingleTokenDecrease({
+      ...input,
+      market: { ...input.market, long_asset_id: backing, short_asset_id: backing,
+        long_funding_fee_per_size_with_long_collateral_milli_bps: 2_000_000n,
+        long_token_claimable_funding_per_size_for_longs: 0n,
+        long_oi_usd_with_short_collateral: 0n, long_oi_tokens_with_short_collateral: 0n,
+        long_oi_usd_with_long_collateral: 50_000_000n, long_oi_tokens_with_long_collateral: 1_000_000n },
+      position: { ...input.position, collateral_asset_id: backing },
+      backingAssetId: backing,
+      prices: priceState({ index_price: p(60_000_000_000n), long_price: SCALE }),
+    });
+    assert.equal(quote.ok, true, String(quote.failure_reasons));
+    assert.equal(quote.cost_deficit, true);
+    assert.equal(quote.primary_output_asset_id, backing);
+    assert.equal(quote.primary_output_amount, 4_900_000n);
+    assert.equal(quote.pnl_output_amount, 0n);
+  }
+});
+
+test("V2 deficit close rejects an unfunded cost instead of advertising a payout", () => {
+  const input = deficitCloseInput(50_000_000n);
+  const quote = quoteV2DecreasePosition({ ...input, prices: priceState(), acceptablePrice: 1n });
+  assert.equal(quote.ok, false);
+  assert.ok((quote.failure_reasons as string[]).includes("close_size_insufficient"));
+  assert.equal(quote.requested_close_resolves, false);
+  assert.equal(quote.primary_output_amount, 0n);
+  assert.equal(quote.expected_voluntary_unpaid_amount, 0n);
+});
+
+test("V2 deficit decrease output swaps use net profit after accrued cost", () => {
+  const input = deficitCloseInput(50_000_000n);
+  const prices = priceState({ index_price: p(70_000_000_000n), long_price: p(70_000_000_000n) });
+  const quote = quoteV2DecreasePosition({ ...input, prices });
+  assert.equal(quote.ok, true, String(quote.failure_reasons));
+  assert.equal(quote.profit_usd, 20_000_000n);
+  assert.equal(quote.accrued_position_cost_usd, 15_000_000n);
+  assert.equal(quote.primary_output_amount, 9_900_000n);
+  assert.equal(quote.pnl_output_amount, 71n);
+  for (const [mode, primary, secondary] of [
+    [V2_OUTPUT_SWAP_NONE, 9_900_000n, 71n],
+    [V2_OUTPUT_SWAP_PNL_TO_COLLATERAL, 14_870_000n, 0n],
+    [V2_OUTPUT_SWAP_COLLATERAL_TO_PNL, 212n, 0n],
+  ]) {
+    const swapped = quoteV2DecreaseWithOutputSwap({ ...input, prices, outputSwapMode: mode });
+    assert.equal(swapped.ok, true, String(swapped.failure_reasons));
+    assert.equal(swapped.final_primary_output_amount, primary);
+    assert.equal(swapped.final_secondary_output_amount, secondary);
+    assert.equal((swapped.close_quote as Record<string, unknown>).claimable_long_token_output, 1_000n);
+  }
+});
+
+test("V2 normal close settles the full net credit before releasing fractional collateral", () => {
+  const input = deficitCloseInput(5_500_000n);
+  const market = {
+    ...input.market, close_fee_bps: 6n,
+    long_funding_fee_per_size_with_short_collateral_milli_bps: 176_604n,
+    long_borrowing_factor_milli_bps: 3_239n,
+    short_token_claimable_funding_per_size_for_longs: 31_410_363_637n,
+    long_token_claimable_funding_per_size_for_longs: 0n,
+    long_oi_usd_with_short_collateral: 5_500_000n, long_oi_tokens_with_short_collateral: 110_000n,
+  };
+  const position = { ...input.position, size_usd: 5_500_000n, size_tokens: 110_000n, collateral_amount: 5_501_681n };
+  for (const [size, collateral, output] of [
+    [5_500_000n, 5_575_525n, 5_572_225n],
+    [2_750_000n, 2_787_762n, 2_786_112n],
+    [1_375_000n, 1_393_881n, 1_393_056n],
+  ]) {
+    const quote = quoteV2DecreasePosition({ ...input, market, position, sizeUsdDelta: size, prices: priceState() });
+    assert.equal(quote.ok, true, String(quote.failure_reasons));
+    assert.equal(quote.cost_deficit, false);
+    assert.equal(quote.funding_fee_collateral_amount, 97_132n);
+    assert.equal(quote.borrowing_fee_collateral_amount, 1_781n);
+    assert.equal(quote.collateral_funding_net_amount, 73_844n);
+    assert.equal(quote.expected_collateral_credit, 73_844n);
+    assert.equal(quote.collateral_delta, collateral);
+    assert.equal(quote.primary_output_amount, output);
+    assert.equal(quote.remaining_collateral, 5_575_525n - collateral);
+    assert.equal(quote.claimable_short_token_output, 0n);
+  }
+});
+
+function deficitCloseInput(sizeUsdDelta: bigint) {
+  return {
+    market: marketState({
+      close_fee_bps: 10n, position_impact_factor_bps: 0n, max_position_impact_bps: 0n,
+      swap_fee_bps: 0n, swap_impact_factor_bps: 0n, max_swap_impact_bps: 0n,
+      long_funding_fee_per_size_with_short_collateral_milli_bps: 2_000_000n,
+      long_borrowing_factor_milli_bps: 1_000_000n,
+      long_token_claimable_funding_per_size_for_longs: 20_000_000n,
+      long_oi_usd_with_short_collateral: 50_000_000n, long_oi_tokens_with_short_collateral: 1_000_000n,
+    }),
+    pool: poolState(),
+    position: { market_id: 7n, collateral_asset_id: USDC, side: V2_SIDE_LONG,
+      size_usd: 50_000_000n, size_tokens: 1_000_000n, collateral_amount: 9_950_000n,
+      entry_price: p(50_000_000_000n) },
+    collateralAssetId: USDC, side: V2_SIDE_LONG, sizeUsdDelta,
+    acceptablePrice: p(49_000_000_000n),
+    prices: priceState({ index_price: p(60_000_000_000n), long_price: p(60_000_000_000n) }),
+  };
+}
+
 test("V2 deficit close quotes use slice cost and preserve other-token claim", () => {
   const market = marketState({
     close_fee_bps: 0n,
@@ -1714,6 +1861,9 @@ test("V2 deficit close quotes use slice cost and preserve other-token claim", ()
   assert.equal(voluntary.requested_close_resolves, true);
   assert.equal(voluntary.remaining_snapshot_mode, "FULL_DELETE");
   assert.equal(voluntary.accrued_position_cost_usd, 1_000_000n);
+  assert.equal(voluntary.pool_credit_amount, 999_998n);
+  assert.equal(voluntary.primary_output_amount, 1n);
+  assert.equal(voluntary.pnl_output_amount, 0n);
   assert.equal(voluntary.claimable_long_token_output, 1_000_000n);
   assert.equal(voluntary.claimable_short_token_output, 0n);
   assert.equal(voluntary.expected_long_claim_output, 1_000_000n);

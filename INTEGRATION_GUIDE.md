@@ -106,6 +106,85 @@ Keep integer domains intact:
 - market position quantity uses its manifest-defined scale;
 - values above JavaScript's safe integer range remain strings or `bigint`.
 
+## Close previews and settlement
+
+Only display an executable payout when `ok` is true. All amounts below are
+integer token units or Usd6 as named; retain integer arithmetic and group wallet
+outputs by asset ID before formatting.
+
+For a normal decrease (`cost_deficit: false`), the contract settles the whole
+position's accrued funding and borrowing first, then releases collateral in
+proportion to the closed size. Funding received in the collateral token offsets
+funding/borrowing owed; any net credit increases position collateral. Remaining
+position snapshots advance, so the next decrease does not charge those same
+accruals again.
+
+| Quote field | Meaning |
+| --- | --- |
+| `funding_fee_collateral_amount`, `borrowing_fee_collateral_amount` | Whole-position costs settled before a normal decrease; not proportional to the closed fraction. |
+| `collateral_funding_net_amount` | Collateral-token funding received minus funding and borrowing owed. Despite its name, this includes borrowing. |
+| `expected_collateral_credit` / `expected_collateral_debit` | Net settlement credited to or debited from position collateral, not an additional wallet output. |
+| `collateral_delta` | Collateral allocated to the closed fraction after normal settlement, before close fees, builder fees and any loss/cost collection. Not the final payout. |
+| `collateral_output_before_builder_fee` | Collateral output after close fee and loss/cost collection, before the builder fee. |
+| `primary_output_amount` / `primary_output_asset_id` | Net collateral returned to the wallet after the quoted builder fee. |
+| `pnl_output_amount` / `pnl_output_asset_id` | Additional profit output after applicable cost offsets; add this even if its asset equals the primary asset. |
+| `claimable_long_token_output`, `claimable_short_token_output` | Separate funding payments to the wallet, in the market's long/short assets. Collateral-token funding already settled into collateral is not paid again here. |
+
+For example, a position with 5,501,681 collateral units and a 73,844 net credit
+has 5,575,525 units after settlement. Closing half releases 2,787,762 units
+before the close fee, leaving 2,787,763 in the position. The entire 73,844 is
+not separately paid to the wallet. Show the full accrual settlement separately
+from the costs attributable to the closed size; do not subtract the full
+funding/borrowing amounts again from `primary_output_amount`.
+
+For **you receive**, sum `primary_output_amount`, `pnl_output_amount` and the
+two `claimable_*_token_output` amounts by their respective asset IDs. Do not
+sum USD profit directly with token amounts. `expected_long_claim_output` and
+`expected_short_claim_output` repeat the corresponding claim outputs; do not
+count those aliases twice. `effective_profit_usd` is before offsets against
+negative impact and deficit costs, not a wallet payout amount.
+
+For `quoteV2DecreaseWithOutputSwap`, use `final_primary_output_amount` and
+`final_secondary_output_amount` with `primary_output_asset_id` and
+`secondary_output_asset_id` instead of the underlying collateral/PnL outputs.
+Then add the separate funding payments from `close_quote`; those claims are
+not included in, or converted by, the output swap.
+
+When **`cost_deficit: true`**, the position cannot fund whole-position
+settlement from collateral alone. The close resolves the closed slice's net
+accrued cost against that slice's collateral and realized profit. Use
+`accrued_position_cost_usd` and `expected_collateral_debit` for that slice;
+do not treat the normal funding/borrowing breakdown fields as its settlement.
+The surviving position retains its accrual snapshots (`UNSETTLED_SLICE`), so
+its remaining cost is still owed. Integer rounding uses total cost minus the
+remaining-position cost, rather than independently rounding a percentage.
+A voluntary close must cover its costs and fee; `close_size_insufficient`
+means a larger resolving close or additional collateral is needed. Version
+0.6.6 corrects the wallet outputs and failure checks for this path.
+
+## Withdrawing unused storage credit
+
+A frontend can call the manifest methods on the **Trading app that owns the
+user's `t2:` box** using `buildAppCall` and `buildSingleAppCallTransaction`:
+
+- `withdraw_storage_credit(amount)` returns that many microALGO from
+  `storage_available_microalgo` to the transaction sender. The amount must be
+  positive and no greater than the available credit. Open positions do not
+  prevent withdrawal of available credit; locked storage stays reserved.
+- `close_storage_account()` deletes the trader storage account and returns
+  available credit plus its trader-box reservation. It requires zero open
+  positions, zero open orders, and no locked reservation beyond the trader
+  box itself.
+
+Supply the owner's `v2TraderBoxKey` box reference and use the current manifest
+and transaction builder for resource budgeting. Fund the outer transaction
+fee and inner refund payment, and simulate before signing. No oracle, keeper
+or admin permission is required; the owner authorizes the call normally,
+including through a rekeyed signer. This is app-specific storage accounting:
+do not assume a Trading credit is available in OrderOps or Markets.
+Closing a position releases its storage reservation into available escrow;
+it does not automatically refund that escrow to the wallet.
+
 ## Recall preparation
 
 Every payout transaction needs a current recall plan. This includes closes,

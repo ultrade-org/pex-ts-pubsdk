@@ -34,24 +34,39 @@ path from configuration to a confirmed wallet transaction.
 ## Install from source
 
 Clone the repository and check out a reviewed commit or release tag so the SDK
-source is pinned. For version 0.6.5, replace the reference below with the supplied commit.
+source is pinned. For version 0.6.6, replace the reference below with the supplied commit.
 This version requires the position-identity contracts:
 
 ```bash
 git clone https://github.com/ultrade-org/pex-ts-pubsdk.git
 cd pex-ts-pubsdk
-git checkout YOUR_REVIEWED_0_6_5_REF
+git checkout YOUR_REVIEWED_0_6_6_REF
 npm ci --ignore-scripts
 npm run build
 npm pack --ignore-scripts
 ```
 
-The final command creates `pdex-sdk-0.6.5.tgz`. Install that exact tarball in
+The final command creates `pdex-sdk-0.6.6.tgz`. Install that exact tarball in
 your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm install --save-exact /path/to/pdex-sdk-0.6.5.tgz --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.6.6.tgz --ignore-scripts
 ```
+
+## Updating from 0.6.5 to 0.6.6
+
+Fixes voluntary decrease/close previews when accrued net funding and borrowing
+exceed position collateral (`cost_deficit: true`). These quotes now deduct the
+closed slice's accrued costs from its realized close value, matching execution.
+Previously they could overstate the payout or accept an unfunded close. Pair,
+single-token and output-swap previews inherit the correction. Rebuild clients;
+there are no API, ABI or contract changes. Normal settlement, liquidation and
+ADL calculations are unchanged.
+
+See [close previews and settlement](./INTEGRATION_GUIDE.md#close-previews-and-settlement)
+for partial-close cost attribution and the wallet-output fields, and
+[storage refunds](./INTEGRATION_GUIDE.md#withdrawing-unused-storage-credit)
+for reclaiming available ALGO escrow.
 
 ## Updating from 0.6.4 to 0.6.5
 
