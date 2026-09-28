@@ -34,24 +34,35 @@ path from configuration to a confirmed wallet transaction.
 ## Install from source
 
 Clone the repository and check out a reviewed commit or release tag so the SDK
-source is pinned. For version 0.6.6, replace the reference below with the supplied commit.
+source is pinned. For version 0.6.7, replace the reference below with the supplied commit.
 This version requires the position-identity contracts:
 
 ```bash
 git clone https://github.com/ultrade-org/pex-ts-pubsdk.git
 cd pex-ts-pubsdk
-git checkout YOUR_REVIEWED_0_6_6_REF
+git checkout YOUR_REVIEWED_0_6_7_REF
 npm ci --ignore-scripts
 npm run build
 npm pack --ignore-scripts
 ```
 
-The final command creates `pdex-sdk-0.6.6.tgz`. Install that exact tarball in
+The final command creates `pdex-sdk-0.6.7.tgz`. Install that exact tarball in
 your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm install --save-exact /path/to/pdex-sdk-0.6.6.tgz --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.6.7.tgz --ignore-scripts
 ```
+
+## Updating from 0.6.6 to 0.6.7
+
+Adds signer-aware final group preparation, signed-wallet-result
+validation and PQ quote simulation with `algosdk` 3.7.0. Existing builders still
+produce ordinary-fee groups: PQ integrations must apply the final preparation
+step before review/signing. Existing ordinary-account builder APIs and signing
+flows remain supported, with ordinary fees. See
+[the integration sequence](./INTEGRATION_GUIDE.md#signer-aware-preparation),
+including Pera's wallet-specific fee handling. Updating the package alone does
+not enable PQ in an application. No contract upgrade is required.
 
 ## Updating from 0.6.5 to 0.6.6
 

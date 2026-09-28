@@ -1,4 +1,11 @@
 import {
+  Address,
+  SignedTransaction,
+  FALCON_1024_SCHEME,
+  addressFromPQKey,
+  decodeSignedTransaction,
+  encodeMsgpack,
+  isValidAddress,
   assignGroupID,
   encodeAddress,
   getApplicationAddress,
@@ -9,6 +16,7 @@ import {
   type SuggestedParams,
   type Transaction,
 } from "algosdk";
+import { Point } from "@noble/ed25519";
 import { sha512_256 } from "@noble/hashes/sha2.js";
 import { appMethod, loadManifest, type ProtocolManifest } from "./manifest.js";
 import {
@@ -6287,6 +6295,128 @@ function abiTransactionTypeMatches(expected: string, actual: string): boolean {
   // V2 generic transaction arguments are native or ASA transfers.
   if (expected === "txn") return actual === "pay" || actual === "axfer";
   return expected === actual;
+}
+
+/** Routing hint only: false rules out an Ed25519 message signer. It does NOT
+ * identify PQ: LogicSig/multisig addresses can also be off-curve. Require an
+ * actual verified signature before classifying an account or setting its fees.
+ * Inspect the current direct authorizer, not the original owner address.
+ */
+export function couldBeEd25519Authorizer(address: string): boolean {
+  const bytes = Address.fromString(address).publicKey;
+  try { Point.fromBytes(bytes, true); return true; } catch { return false; }
+}
+
+/** A resolved direct authorizer, supplied by the wallet or a verified proof.
+ * Read the sender's current auth-addr before signing; do not infer PQ from an address.
+ */
+export type V2TransactionSignerContext =
+  | { scheme: "ed25519"; authorizingAddress: string }
+  | { scheme: "falcon-1024"; authorizingAddress: string; publicKey: Uint8Array; salt: number };
+
+const signingFees = new WeakMap<Transaction, { base: bigint; prepared: bigint }>();
+
+/** Prepare a fully composed group before review/signing. Mutates the same array,
+ * preserving its primary-transaction metadata. Imported transactions must have
+ * ordinary fees, without an already-added PQ contribution. Reusing these same
+ * objects is idempotent; do not edit their fees after preparation.
+ * params must be the node's original suggested parameters, not flat-fee overrides.
+ */
+export function prepareV2TransactionGroupForSigning(
+  transactions: Transaction[],
+  signers: readonly V2TransactionSignerContext[],
+  params: SuggestedParams,
+): Transaction[] {
+  if (!transactions.length || transactions.length > 16 || signers.length !== transactions.length) {
+    throw new Error("invalid_signing_context_count");
+  }
+  if (params.flatFee) throw new Error("signing_requires_node_suggested_params");
+  const minFee = BigInt(params.minFee);
+  const perByte = BigInt(params.fee);
+  if (minFee <= 0n || perByte < 0n) throw new Error("invalid_signing_fee_parameters");
+  // Validate the entire group before changing any fees.
+  const contexts = transactions.map((txn, index) => unsignedV2TransactionForSimulation(txn, signers[index]));
+  const bases = transactions.map((txn) => {
+    const old = signingFees.get(txn);
+    if (old && old.prepared !== txn.fee) throw new Error("prepared_transaction_fee_changed");
+    return old?.base ?? txn.fee;
+  });
+  const metadata = (transactions as MetadataBearingTransactions)[V2_TRANSACTION_GROUP_METADATA];
+  if (metadata) {
+    // Finalize resources and helper notes before measuring the signed envelope.
+    // Preserve the original array's non-configurable primary-call metadata.
+    grouped([...transactions], metadata.primaryIndex, metadata.primaryAppName);
+  }
+  for (const [index, txn] of transactions.entries()) {
+    const pq = signers[index].scheme === "falcon-1024";
+    txn.fee = bases[index] + (pq ? 2n * minFee : 0n);
+    // Include the eventual group field and maximum Falcon signature length.
+    // This sizing envelope is never signed or submitted.
+    const originalGroup = txn.group;
+    if (transactions.length > 1 && !txn.group) txn.group = new Uint8Array(32);
+    if (perByte > 0n) {
+      const context = contexts[index];
+      const envelope = new SignedTransaction({
+        txn, sgnr: context.sgnr,
+        ...(pq ? { pqsig: { ...context.pqsig!, sig: new Uint8Array(1462) } } : { sig: new Uint8Array(64) }),
+      });
+      // Fee width can grow as its encoded size changes; converge monotonically.
+      for (;;) {
+        const executionBudget = bases[index] > minFee ? bases[index] - minFee : 0n;
+        const required = perByte * BigInt(encodeMsgpack(envelope).length) + executionBudget;
+        if (required <= txn.fee) break;
+        txn.fee = required;
+      }
+    }
+    txn.group = originalGroup;
+    signingFees.set(txn, { base: bases[index], prepared: txn.fee });
+  }
+  for (const txn of transactions) txn.group = undefined;
+  if (new Set(transactions.map((txn) => txn.txID())).size !== transactions.length) throw new Error("duplicate_transaction");
+  if (transactions.length > 1) assignGroupID(transactions);
+  return transactions;
+}
+
+/** Placeholder for unsigned quote simulation only. Use allowEmptySignatures;
+ * never use this envelope or a permissive simulation result as login proof.
+ */
+export function unsignedV2TransactionForSimulation(
+  txn: Transaction, signer: V2TransactionSignerContext,
+): SignedTransaction {
+  if (!signer || !isValidAddress(signer.authorizingAddress)) throw new Error("invalid_transaction_authorizer");
+  const sgnr = txn.sender.toString() === signer.authorizingAddress ? undefined : Address.fromString(signer.authorizingAddress);
+  if (signer.scheme === "ed25519") return new SignedTransaction({ txn, sgnr });
+  if (signer.scheme !== "falcon-1024" || signer.publicKey.length !== 1793) throw new Error("unsupported_transaction_signer");
+  const derived = addressFromPQKey(FALCON_1024_SCHEME, signer.publicKey);
+  if (derived.address.toString() !== signer.authorizingAddress || derived.salt !== signer.salt) throw new Error("pq_authorizer_mismatch");
+  return new SignedTransaction({ txn, sgnr, pqsig: {
+    sch: FALCON_1024_SCHEME, slt: signer.salt, pk: signer.publicKey, sig: new Uint8Array(),
+  } });
+}
+
+/** Validate wallet output without re-encoding it. Submit the original bytes.
+ * This checks body/category/authorizer; the node verifies the cryptographic signature.
+ */
+export function validateV2SignedTransactionGroup(
+  transactions: readonly Transaction[], signed: readonly Uint8Array[], signers: readonly V2TransactionSignerContext[],
+): void {
+  if (signed.length !== transactions.length || signers.length !== transactions.length) throw new Error("signed_transaction_count_mismatch");
+  for (const [index, txn] of transactions.entries()) {
+    const expected = unsignedV2TransactionForSimulation(txn, signers[index]);
+    const actual = decodeSignedTransaction(signed[index]);
+    if (actual.txn.txID() !== txn.txID()) throw new Error("wallet_changed_reviewed_transaction");
+    if (actual.sgnr?.toString() !== expected.sgnr?.toString()) throw new Error("wallet_changed_transaction_authorizer");
+    if (signers[index].scheme === "ed25519") {
+      if (!actual.sig || actual.pqsig || actual.lsig || actual.msig) throw new Error("wallet_changed_signature_scheme");
+    } else {
+      const pq = actual.pqsig;
+      if (!pq || actual.sig || actual.lsig || actual.msig || !pq.sig?.length
+          || pq.sch.toString() !== expected.pqsig!.sch.toString()
+          || pq.slt !== expected.pqsig!.slt || pq.pk.toString() !== expected.pqsig!.pk.toString()) {
+        throw new Error("wallet_changed_signature_scheme");
+      }
+    }
+  }
 }
 
 export function v2TransactionGroupResult(transactions: Transaction[]): V2TransactionGroupResult {

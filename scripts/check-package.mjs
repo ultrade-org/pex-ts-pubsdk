@@ -67,6 +67,7 @@ const expectedTestFiles = [
   "order-submission-validation.test.ts",
   "position-identity-lifecycle.test.ts",
   "position-token-precision.test.ts",
+  "pq-signing.test.ts",
   "position-resolution-simulation.test.ts",
   "public-capabilities.test.ts",
   "read-models.test.ts",
@@ -135,7 +136,7 @@ const expectedLockedPackages = {
   "node_modules/@noble/hashes": "2.2.0",
   "node_modules/@types/node": "24.12.3",
   "node_modules/algorand-msgpack": "1.1.0",
-  "node_modules/algosdk": "3.5.2",
+  "node_modules/algosdk": "3.7.0",
   "node_modules/bignumber.js": "9.3.1",
   "node_modules/hi-base32": "0.5.1",
   "node_modules/js-sha256": "0.9.0",
@@ -223,6 +224,10 @@ const expectedClientMethods = [
 ];
 
 const expectedTransactionFunctions = [
+  "couldBeEd25519Authorizer",
+  "prepareV2TransactionGroupForSigning",
+  "unsignedV2TransactionForSimulation",
+  "validateV2SignedTransactionGroup",
   "prepareV2DecreaseOrCloseInput",
   "prepareV2DecreaseOrCloseTransactions",
   "appendV2TransactionGroupTransactions",

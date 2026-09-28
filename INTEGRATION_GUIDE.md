@@ -537,6 +537,76 @@ and total wallet debit; transaction builders add the authorized transfer and
 adjust the primary index automatically. Always display the fee and final debit
 before requesting a wallet signature.
 
+## Signer-aware preparation
+
+PQ support requires `algosdk` 3.7.0. Resolve each transaction sender's current
+direct `authAddr` from your node (or the sender itself if absent). Do not follow
+that authorizer's own rekey. The sender remains the owner and payout recipient.
+The node identifies the authorized address, but does not reliably identify its
+signature scheme or supply its Falcon public key.
+
+Obtain `V2TransactionSignerContext` from a verified wallet proof or trusted
+signer integration. Ed25519 needs `scheme: "ed25519"` and `authorizingAddress`.
+Falcon needs `scheme: "falcon-1024"`, `authorizingAddress`, its 1,793-byte public
+key and canonical SDK-derived `salt`. `couldBeEd25519Authorizer()` is only a
+routing hint: an off-curve address is **not** proof of PQ. These helpers support
+the standard addresses produced by Algorand's SDK; they do not add multisig or
+LogicSig signing.
+
+Prepare the **complete** group, including opt-ins, recalls, marks and order
+cleanup, before displaying its final fees and asking for signatures:
+
+```ts
+import {
+  prepareV2TransactionGroupForSigning,
+  validateV2SignedTransactionGroup,
+} from "@pdex/sdk/transactions";
+
+const nodeParams = await algod.getTransactionParams().do();
+// One freshly resolved context per transaction, in group order.
+prepareV2TransactionGroupForSigning(transactions, signerContexts, nodeParams);
+// Review these final transactions and fees here.
+const signedBytes = await wallet.signTransactions(transactions);
+validateV2SignedTransactionGroup(transactions, signedBytes, signerContexts);
+await algod.sendRawTransaction(signedBytes).do();
+```
+
+Use original node parameters, without `flatFee` overrides. Builders' ordinary
+execution fees are preserved; only Falcon-signed outer transactions receive
+the extra two minimum-fee contributions. Larger signed envelopes are included
+when the node advertises per-byte fees. Inner calls and ordinary keeper calls
+do not acquire a surcharge because the owner is PQ. A PQ-origin owner rekeyed
+to Ed25519 pays ordinary fees.
+
+The TS helper mutates the same array and preserves primary-call metadata.
+Re-preparing those same objects is idempotent; imported/rebuilt transactions
+must start with ordinary fees, without an already-added PQ contribution. Do
+not change fees or group composition after review/signing. Submit the original
+wallet bytes; validation checks the reviewed body, category and authorizer,
+while the node verifies the cryptographic signature. With
+`submitPdexTransactionGroup()`, perform preparation before calling it and the
+validation inside your `signTransactions` callback.
+
+**Pera PQ fees:** the tested Pera Android wallet adds `2 * nodeParams.minFee`
+to every transaction it signs with Falcon, even if the dApp already budgeted
+that surcharge. With Pera Connect 1.6.1, retain the prepared group above as the
+expected result. For the wallet request only, clone the transactions, subtract
+that contribution from each Falcon transaction Pera will sign, clear the group
+IDs and regroup the complete copies if the original was grouped. Pera restores
+the surcharge and recalculates the group. Validate its returned bytes against
+the original prepared group; never accept arbitrary fee or body changes. Keep
+ordinary signers and Lute requests unchanged. If a wallet version uses different
+fee behavior, stop and qualify its adapter rather than weakening validation.
+
+`unsignedV2TransactionForSimulation()` creates the correct empty Ed25519/PQ
+envelope for unsigned quote simulation. Position-cost simulation accepts the
+optional `signer` context as well. Empty-signature simulation is never login
+proof. Login verification belongs to your backend: verify messages against the
+current authorizer while retaining the owner in the challenge. If a wallet
+cannot sign PQ messages, a bounded non-broadcast proof needs strict signature
+verification, owner/network/challenge binding and no signer-fixing overrides.
+Do not classify a signer or increase its fees from a user checkbox.
+
 ## 8. Review, sign, and confirm
 
 Immediately before wallet signing:

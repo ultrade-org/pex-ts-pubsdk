@@ -31,7 +31,7 @@ decode or verify it, and pass its bytes unchanged to transaction builders.
 | `@pdex/sdk/planners` | Structured action planning and resource manifests. |
 | `@pdex/sdk/marketYield` | Yield-state normalization, valuation, withdrawal quotes, and resource closure. |
 | `@pdex/sdk/externalYield` | External yield-provider state and resource helpers. |
-| `@pdex/sdk/transactions` | App-call descriptors and wallet-ready Algorand transaction groups. |
+| `@pdex/sdk/transactions` | App-call descriptors, Algorand groups, signer-aware fee preparation, unsigned simulation envelopes and signed-body validation. |
 
 ## Capability guarantees
 

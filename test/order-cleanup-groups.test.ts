@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { computeGroupID, decodeUnsignedTransaction, type Transaction } from "algosdk";
+import { computeGroupID, decodeUnsignedTransaction, FALCON_1024_SCHEME, addressFromPQKey, type Transaction } from "algosdk";
 import { setProtocolManifest } from "../src/manifest.js";
 import { planV2CancelRelatedReduceOrders, planV2CloseWithOrderCleanup } from "../src/orders.js";
 import {
   buildV2CancelOrderTransactions, buildV2DecreaseOrCloseTransactions,
-  v2TransactionGroupResult, V2_ORDER_KIND,
+  v2TransactionGroupResult, V2_ORDER_KIND, prepareV2TransactionGroupForSigning,
 } from "../src/transactions.js";
 
 const spec = (name: string, types: string[], returns = "byte[]") => ({
@@ -169,4 +169,24 @@ test("close cleanup preserves a nonzero primary index after settlement maintenan
   assertGroup(plan.closeGroup, 2002);
   assert.equal(v2TransactionGroupResult(plan.groups[0]).primaryIndex, original.primaryIndex);
   assert.equal(v2TransactionGroupResult(plan.closeGroup).primaryIndex, original.primaryIndex);
+});
+
+
+test("PQ fee preparation preserves combined cleanup resources and primary metadata", () => {
+  const plan = planV2CloseWithOrderCleanup({ ...close, ...attached, orders: orders(), includeCancelOrders: true });
+  const group = plan.groups[0];
+  const before = group.map(txn => txn.toEncodingData());
+  const primary = v2TransactionGroupResult(group);
+  const publicKey = new Uint8Array(1793); publicKey[0] = 9;
+  const derived = addressFromPQKey(FALCON_1024_SCHEME, publicKey);
+  const signer = { scheme: "falcon-1024" as const, authorizingAddress: derived.address.toString(), publicKey, salt: derived.salt };
+  prepareV2TransactionGroupForSigning(group, group.map(() => signer), { ...suggestedParams, fee: 0 });
+  assertGroup(group, 2002);
+  assert.equal(v2TransactionGroupResult(group).primaryIndex, primary.primaryIndex);
+  for (const [i, txn] of group.entries()) {
+    const after = txn.toEncodingData();
+    assert.equal(after.get("fee"), BigInt(before[i].get("fee") as number) + 2000n);
+    for (const key of ["fee", "grp"]) { after.delete(key); before[i].delete(key); }
+    assert.deepEqual(after, before[i]);
+  }
 });

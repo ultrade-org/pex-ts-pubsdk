@@ -48,6 +48,9 @@ export interface AccountSessionRequest {
 export interface AccountSessionResponse extends BackendStateRecord {
   /** Direct on-chain signer bound at login; address remains the account owner. */
   authorizing_address?: string;
+  signer_scheme?: "ed25519" | "falcon-1024" | "logicsig";
+  pq_public_key?: string;
+  pq_salt?: number;
   session_token?: string;
   token_type?: "Bearer" | string;
   address: string;

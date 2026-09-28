@@ -24,6 +24,9 @@ import {
   type OracleMessageV3,
 } from "./oracle.js";
 import {
+  prepareV2TransactionGroupForSigning,
+  unsignedV2TransactionForSimulation,
+  type V2TransactionSignerContext,
   buildAppCall,
   toApplicationNoOpTxn,
   type AppCallDescriptor,
@@ -1091,6 +1094,7 @@ export async function simulateV2PositionCostResolution(
   algod: V2PositionCostAlgod,
   input: {
     sender: AddressLike;
+    signer?: V2TransactionSignerContext;
     v2TradingRiskOpsAppId: number;
     request: Record<string, Uint64Like>;
     manifest?: ProtocolManifest;
@@ -1104,15 +1108,16 @@ export async function simulateV2PositionCostResolution(
   const descriptor = buildV2PositionCostResolutionCall({ ...input, manifest });
   const suggestedParams = await requestDo(algod.getTransactionParams());
   const transaction = toApplicationNoOpTxn(descriptor, suggestedParams);
+  if (input.signer) prepareV2TransactionGroupForSigning([transaction], [input.signer], suggestedParams);
   const group = new modelsv2.SimulateRequestTransactionGroup({
-    txns: [new SignedTransaction({ txn: transaction })],
+    txns: [input.signer ? unsignedV2TransactionForSimulation(transaction, input.signer) : new SignedTransaction({ txn: transaction })],
   });
   const request = new modelsv2.SimulateRequest({
     txnGroups: [group],
     allowEmptySignatures: true,
     // This unsigned quote must also work when sender has a different auth-addr.
     // Algod resolves that signer for simulation; the transaction keeps its owner.
-    fixSigners: true,
+    fixSigners: !input.signer,
   });
   const simulation = await requestDo(algod.simulateTransactions(request)) as any;
   const decoded = decodeV2PositionCostSimulation(simulation, manifest);
@@ -1134,6 +1139,7 @@ export async function readAndSimulateV2PositionCostResolution(
   algod: V2PositionCostAlgod,
   input: {
     sender: AddressLike;
+    signer?: V2TransactionSignerContext;
     v2TradingRiskOpsAppId: number;
     positionAppId: number;
     marketsAppId: number;
@@ -1153,6 +1159,7 @@ export async function readAndSimulateV2PositionCostResolution(
   const request = await readV2PositionCostResolutionRequest(algod, input);
   return simulateV2PositionCostResolution(algod, {
     sender: input.sender,
+    signer: input.signer,
     v2TradingRiskOpsAppId: input.v2TradingRiskOpsAppId,
     request,
     manifest: input.manifest,

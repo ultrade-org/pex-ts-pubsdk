@@ -1,6 +1,6 @@
 {
   "name": "@pdex/sdk",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "license": "SEE LICENSE IN LICENSE",
   "description": "Public TypeScript SDK for integrating with the PDex V2 protocol",
   "type": "module",
@@ -120,7 +120,7 @@
   "dependencies": {
     "@noble/ed25519": "3.1.0",
     "@noble/hashes": "2.2.0",
-    "algosdk": "3.5.2"
+    "algosdk": "3.7.0"
   },
   "devDependencies": {
     "@types/node": "24.12.3",
