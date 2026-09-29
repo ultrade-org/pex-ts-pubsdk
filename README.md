@@ -34,24 +34,32 @@ path from configuration to a confirmed wallet transaction.
 ## Install from source
 
 Clone the repository and check out a reviewed commit or release tag so the SDK
-source is pinned. For version 0.6.7, replace the reference below with the supplied commit.
+source is pinned. For version 0.6.8, replace the reference below with the supplied commit.
 This version requires the position-identity contracts:
 
 ```bash
 git clone https://github.com/ultrade-org/pex-ts-pubsdk.git
 cd pex-ts-pubsdk
-git checkout YOUR_REVIEWED_0_6_7_REF
+git checkout YOUR_REVIEWED_0_6_8_REF
 npm ci --ignore-scripts
 npm run build
 npm pack --ignore-scripts
 ```
 
-The final command creates `pdex-sdk-0.6.7.tgz`. Install that exact tarball in
+The final command creates `pdex-sdk-0.6.8.tgz`. Install that exact tarball in
 your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm install --save-exact /path/to/pdex-sdk-0.6.7.tgz --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.6.8.tgz --ignore-scripts
 ```
+
+## Updating from 0.6.7 to 0.6.8
+
+Adds `buildV2WithdrawStorageCreditTransactions` and
+`buildV2CloseStorageAccountTransactions` (and matching call descriptors).
+Select the Trading app that owns the credit; the builders supply the owner box,
+program read budget and inner-payment fee. Existing integrations are unchanged.
+See [storage refunds](./INTEGRATION_GUIDE.md#withdrawing-unused-storage-credit).
 
 ## Updating from 0.6.6 to 0.6.7
 

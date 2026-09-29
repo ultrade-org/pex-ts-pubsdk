@@ -428,6 +428,17 @@ export interface V2FundStorageGroupInput extends PdexV2AppRefs, SenderInput {
   paymentMicroAlgo: BigNumberish;
 }
 
+/** Storage credit belongs to the selected Trading application, not to a market. */
+export interface V2StorageAccountInput extends SenderInput {
+  tradingAppId: number;
+  tradingAppName: "PDexV2Trading" | "PDexV2SingleTokenTrading";
+  manifest?: ProtocolManifest;
+}
+
+export interface V2WithdrawStorageCreditInput extends V2StorageAccountInput {
+  amountMicroAlgo: BigNumberish;
+}
+
 export interface V2DepositLiquidityGroupInput extends PdexV2AppRefs, SenderInput, V2MarketAssetRefs, OracleCallArgs {
   v2AdminAppId?: number;
   v2AdminOpsAppId?: number;
@@ -1321,6 +1332,55 @@ export function buildV2FundStorageCall(input: V2FundStorageGroupInput): AppCallD
     boxes: [v2TraderBoxKey(input.sender)],
     manifest: input.manifest ?? loadManifest(undefined, 2),
   });
+}
+
+function buildV2StorageAccountCall(
+  input: V2StorageAccountInput,
+  methodName: "withdraw_storage_credit" | "close_storage_account",
+  args: BigNumberish[],
+): AppCallDescriptor {
+  if (input.tradingAppName !== "PDexV2Trading" && input.tradingAppName !== "PDexV2SingleTokenTrading") {
+    throw new Error("unsupported_storage_application");
+  }
+  return buildAppCall({
+    appId: input.tradingAppId,
+    appName: input.tradingAppName,
+    methodName,
+    sender: input.sender,
+    args,
+    boxes: [v2TraderBoxKey(input.sender)],
+    flatFeeMicroAlgo: 2_000,
+    manifest: input.manifest ?? loadManifest(undefined, 2),
+  });
+}
+
+/** Withdraw only available ALGO credit; positions and locked storage are unchanged. */
+export function buildV2WithdrawStorageCreditCall(input: V2WithdrawStorageCreditInput): AppCallDescriptor {
+  if (bigint(input.amountMicroAlgo) <= 0n) throw new Error("storage_withdrawal_amount_must_be_positive");
+  return buildV2StorageAccountCall(input, "withdraw_storage_credit", [input.amountMicroAlgo]);
+}
+
+/** Returns available credit and the trader-box deposit; on-chain eligibility is enforced. */
+export function buildV2CloseStorageAccountCall(input: V2StorageAccountInput): AppCallDescriptor {
+  return buildV2StorageAccountCall(input, "close_storage_account", []);
+}
+
+export function buildV2WithdrawStorageCreditTransactions(
+  input: V2WithdrawStorageCreditInput,
+  suggestedParams: SuggestedParams,
+): Transaction[] {
+  return grouped([toApplicationNoOpTxn(buildV2WithdrawStorageCreditCall(input), suggestedParams, {
+    flatFeeMicroAlgo: 2n * BigInt(suggestedParams.minFee),
+  })]);
+}
+
+export function buildV2CloseStorageAccountTransactions(
+  input: V2StorageAccountInput,
+  suggestedParams: SuggestedParams,
+): Transaction[] {
+  return grouped([toApplicationNoOpTxn(buildV2CloseStorageAccountCall(input), suggestedParams, {
+    flatFeeMicroAlgo: 2n * BigInt(suggestedParams.minFee),
+  })]);
 }
 
 export function buildV2OpenOrIncreaseCall(input: V2OpenOrIncreaseGroupInput): AppCallDescriptor {

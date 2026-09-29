@@ -52,6 +52,7 @@ const expectedScriptFiles = [
 ];
 
 const expectedTestFiles = [
+  "storage-credit.test.ts",
   "action-recall.test.ts",
   "api.test.ts",
   "builder-fees.test.ts",
@@ -224,6 +225,10 @@ const expectedClientMethods = [
 ];
 
 const expectedTransactionFunctions = [
+  "buildV2WithdrawStorageCreditCall",
+  "buildV2CloseStorageAccountCall",
+  "buildV2WithdrawStorageCreditTransactions",
+  "buildV2CloseStorageAccountTransactions",
   "couldBeEd25519Authorizer",
   "prepareV2TransactionGroupForSigning",
   "unsignedV2TransactionForSimulation",

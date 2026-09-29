@@ -164,8 +164,9 @@ means a larger resolving close or additional collateral is needed. Version
 
 ## Withdrawing unused storage credit
 
-A frontend can call the manifest methods on the **Trading app that owns the
-user's `t2:` box** using `buildAppCall` and `buildSingleAppCallTransaction`:
+Use `buildV2WithdrawStorageCreditTransactions` or
+`buildV2CloseStorageAccountTransactions` from `@pdex/sdk/transactions` on the
+**Trading app that owns the user's `t2:` box**:
 
 - `withdraw_storage_credit(amount)` returns that many microALGO from
   `storage_available_microalgo` to the transaction sender. The amount must be
@@ -176,9 +177,13 @@ user's `t2:` box** using `buildAppCall` and `buildSingleAppCallTransaction`:
   positions, zero open orders, and no locked reservation beyond the trader
   box itself.
 
-Supply the owner's `v2TraderBoxKey` box reference and use the current manifest
-and transaction builder for resource budgeting. Fund the outer transaction
-fee and inner refund payment, and simulate before signing. No oracle, keeper
+Pass `{ sender, tradingAppId, tradingAppName }` and, for withdrawal,
+`amountMicroAlgo`. `tradingAppName` is `PDexV2Trading` or
+`PDexV2SingleTokenTrading`; pair it with that application's ID. Read the current
+owner box using `v2TraderBoxKey` and `parseV2TraderState` before quoting the refund.
+The builders include the box, program read budget, and two minimum network fees
+(outer call plus inner refund). Apply signer-aware preparation before signing.
+Only fees are paid from the wallet; the refund is incoming ALGO. No oracle, keeper
 or admin permission is required; the owner authorizes the call normally,
 including through a rekeyed signer. This is app-specific storage accounting:
 do not assume a Trading credit is available in OrderOps or Markets.

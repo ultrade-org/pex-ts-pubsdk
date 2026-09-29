@@ -46,6 +46,7 @@ The supported integration surface includes:
 - pair and single-token liquidity, trading, margin, order, liquidation, swap,
   and CVA wallet groups;
 - linked and active attached-order groups;
+- owner-authorized storage-credit withdrawals and storage-account closure;
 - capped, user-authorized builder fees for supported pair and swap actions;
 - box and receipt decoding for independent state verification;
 - normalized market, pool, position, order, LP, margin, and activity models;
