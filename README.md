@@ -34,24 +34,32 @@ path from configuration to a confirmed wallet transaction.
 ## Install from source
 
 Clone the repository and check out a reviewed commit or release tag so the SDK
-source is pinned. For version 0.6.8, replace the reference below with the supplied commit.
+source is pinned. The current documentation release is version 0.6.9.
 This version requires the position-identity contracts:
 
 ```bash
 git clone https://github.com/ultrade-org/pex-ts-pubsdk.git
 cd pex-ts-pubsdk
-git checkout YOUR_REVIEWED_0_6_8_REF
+git checkout v0.6.9
 npm ci --ignore-scripts
 npm run build
 npm pack --ignore-scripts
 ```
 
-The final command creates `pdex-sdk-0.6.8.tgz`. Install that exact tarball in
+The final command creates `pdex-sdk-0.6.9.tgz`. Install that exact tarball in
 your application while continuing to suppress dependency lifecycle scripts:
 
 ```bash
-npm install --save-exact /path/to/pdex-sdk-0.6.8.tgz --ignore-scripts
+npm install --save-exact /path/to/pdex-sdk-0.6.9.tgz --ignore-scripts
 ```
+
+## Updating from 0.6.8 to 0.6.9
+
+Documents [pool returns and income APR](./INTEGRATION_GUIDE.md#pool-returns-and-income-apr):
+field meanings, units, benchmark formulas, history coverage, and display labels.
+Period returns are not annualized; fee/yield APR is income-only and does not
+compound. No runtime, API, dependency, or contract changes; existing integrations
+do not need to change their calls.
 
 ## Updating from 0.6.7 to 0.6.8
 
@@ -278,6 +286,10 @@ const [summary, markets, pools, price, candles] = await Promise.all([
 
 const performance = await pdex.v2PoolPerformance(poolId, "30d");
 ```
+
+See [pool returns and income APR](./INTEGRATION_GUIDE.md#pool-returns-and-income-apr)
+before displaying these values: historical pool returns and the separate
+seven-day income APR fields are different metrics, and neither is APY.
 
 Account positions, orders, LP balances, trades, activity, margin, and CVA
 shares use wallet-authenticated read sessions. Supply the returned session

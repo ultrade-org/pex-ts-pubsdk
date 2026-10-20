@@ -72,6 +72,80 @@ Use `@pdex/sdk/readModels` to convert JSON integer strings and snake-case public
 records into stable camel-case models with `bigint` amounts. Every normalized
 model retains its original record in `raw` for forward-compatible access.
 
+### Pool returns and income APR
+
+`v2PoolPerformance(poolId, period)` and `v2CvaPerformance(vaultId, period)`
+fetch historical performance from your configured backend. The SDK does not
+calculate that history from current chain state or fetch it from R2. Periods
+are `"7d"`, `"30d"` (default), `"90d"`, and `"total"`.
+
+**Performance is a past-period return, not APR or APY.** It measures the change
+in USD NAV per share, so it includes underlying asset price movements and the
+pool economics reflected in NAV, including fees, yield and trader PnL. Deposits
+and withdrawals that change NAV and share supply proportionally do not create
+returns. This is product performance, not an individual wallet's realized
+return or a withdrawal quote; it does not include that wallet's entry/exit
+costs or network fees.
+
+| Response field | Meaning and units |
+| --- | --- |
+| `summary.product_return_bps` | `(last share price / first share price - 1) × 10,000`, subject to integer rounding. |
+| `summary.hold_return_bps` | Return of the benchmark described by `benchmark.kind`, in basis points. |
+| `summary.vs_holding_bps` | `product_return_bps - hold_return_bps`: an additive percentage-point difference, not a relative return ratio. |
+| `benchmark` | `kind`, `long_asset_id`, and `short_asset_id` identify the comparison. Use these assets, which need not be the market's index asset. |
+| `points[].timestamp` | Unix seconds at the start of the completed UTC daily bucket, not the exact observation time. |
+| `points[].share_price_usd` | USD per share, encoded as an integer string with six decimals: `"1000000"` means $1 per share. |
+| `points[].product_index`, `points[].hold_index` | Normalized series starting at `1,000,000`; `1,100,000` means +10%. |
+| `points[].gap_before` | Missing daily history precedes this point; do not present the gap as continuous observations. |
+
+For all `_bps` return/rate fields, divide by **100** to display a percentage:
+`1250` means **12.5%**. For `vs_holding_bps`, `250` means **+2.5 percentage
+points**. Rates and returns can be negative where applicable.
+
+The paired-pool benchmark, `geometric_mean_50_50`, is
+`sqrt((long price / initial long price) × (short price / initial short price))`.
+It is **not a literal buy-and-hold 50/50 basket**: if one asset doubles and the
+other is unchanged, the benchmark gains about 41.42%, while that basket gains
+50%. `single_asset` uses the price change of the identified asset. Label the
+comparison **“vs 50/50 geometric benchmark”** or **“vs holding [asset]”** as
+appropriate; `vs_holding_bps` is the existing field name, not a promise that
+every benchmark represents buy-and-hold.
+
+History uses valid completed-day samples, excludes the current UTC day, and
+requires observations within the final two hours of each included day.
+`sample_interval_seconds` is `86400`. Returns span the first and last available
+samples, so `"30d"` does not guarantee 30 full days of measured performance.
+Show the actual date range and gaps. `"total"` means available recorded history
+and may be downsampled to 500 points. If `reason` is `"insufficient_history"`
+or `"no_valid_completed_samples"`, or fewer than two points exist, show
+**“Insufficient history”**, not the placeholder zero returns as 0% performance.
+
+Income APR is separate data on `v2Pool()` / `v2Pools()` and
+`v2CvaVault()` / `v2CvaVaults()` records:
+
+| Field | Meaning |
+| --- | --- |
+| `fee_apr_7d_bps` | Annualized fee income credited to the pool; excludes fee shares paid elsewhere. |
+| `yield_apr_7d_bps` | Annualized recognized external-yield income credited to the pool. |
+| `total_apr_7d_bps` | Sum of the fee and yield APRs; not the complete net LP return. |
+| `fee_usd_7d`, `yield_usd_7d` | Recorded income over the trailing seven-day window, in USD with six decimals. |
+| `apr_status`, `apr_basis` | Display APR only when status is `"ready"` and basis is `"historical_capital_v1"`; missing/non-ready values mean unavailable, not 0%. |
+| `apr_window_start`, `apr_window_end`, `apr_coverage_start`, `apr_missing_events` | Unix-second window/coverage boundaries and the count of income events with missing valuation data. Check coverage before implying a full seven-day record. |
+
+Each income contribution is divided by the pool capital valued when that
+income was credited. Those contributions are summed over the trailing seven
+days and annualized by `365 / 7`, without compounding. It is not seven-day
+income divided by today's TVL, and it is not APY. CVA income and capital follow
+the vault's historical ownership and include idle capital in the denominator.
+
+These APRs measure fee/yield income, not underlying asset gains, net trader PnL,
+or all funding/borrowing effects. Provider losses remain in NAV/performance
+rather than being subtracted from the income-only yield APR. Principal moved
+into/out of yield is not income. A positive income APR can coexist with a
+negative total pool return. Use **“Fees + yield APR (past 7d)”** and **“Pool
+return (selected dates)”** as separate labels; neither is a promised future
+rate. Do not add the APR to the period return or label either value APY.
+
 ## 4. Authenticate account reads
 
 Create the canonical message with `buildAccountSessionMessage()`, have the

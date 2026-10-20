@@ -111,7 +111,7 @@ the responsibilities rather than prescribing a new server framework.
 | Account reads | Implement `/v2/auth/session` and logout plus your required `/v2/accounts/...` routes. Verify the signed challenge, network, genesis, origin, expiry and nonce; for rekeyed accounts verify the current on-chain signer. Your backend issues its own sessions. |
 | Payouts | Implement `/v2/resource-registry/market-yield` and `POST /v2/market-yield/action-recall-plan` from current owned cash, receipts, provider resources and limits. Follow [recall preparation](./INTEGRATION_GUIDE.md#recall-preparation); an ordinary price quote is insufficient. |
 | Orders and CVA | Supply the order policy, order/account state, vault/allocation state and quote routes needed by the chosen action family. |
-| History, performance and candles | Index confirmed activity and maintain the required history yourself. State snapshots alone cannot reconstruct complete historical activity or returns. Report unavailable/incomplete coverage honestly. |
+| History, performance and candles | Index confirmed activity and maintain the required history yourself. State snapshots alone cannot reconstruct complete historical activity or returns. Follow the [performance and APR definitions](./INTEGRATION_GUIDE.md#pool-returns-and-income-apr), including units, benchmark identity and unavailable/incomplete coverage. |
 
 This is a compatibility guide, not a complete backend implementation or a
 claim that all response schemas fully specify the financial calculations.

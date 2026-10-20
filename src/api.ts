@@ -230,6 +230,15 @@ export interface V2AccountActivityResponse extends BackendStateRecord {
   activities?: V2AccountActivityItemState[];
 }
 
+/**
+ * Historical USD-per-share returns, not annualized APR or compounded APY.
+ * Summary return fields use basis points (100 = 1%); vs_holding_bps is an
+ * additive percentage-point difference. The paired geometric_mean_50_50
+ * benchmark is not a literal buy-and-hold basket.
+ * Points use completed UTC days and indices based at 1,000,000. Check reason,
+ * point count and gap_before before displaying a return; zero may mean missing
+ * history. See INTEGRATION_GUIDE.md: "Pool returns and income APR" for all fields.
+ */
 export interface V2LiquidityPerformanceResponse extends BackendStateRecord {
   product_kind?: "market_pool" | "cva" | string;
   product_id?: number | string;
@@ -372,6 +381,7 @@ export class PdexApiClient {
     return this.get(`/v2/pools/${pathPart(poolId)}`);
   }
 
+  /** Fetch past-period pool returns from the configured backend; not APR/APY. */
   async v2PoolPerformance(
     poolId: number | bigint | string,
     period: LiquidityPerformancePeriod = "30d",
@@ -629,6 +639,7 @@ export class PdexApiClient {
     return this.get(`/v2/cva/vaults/${pathPart(vaultId)}`);
   }
 
+  /** Fetch past-period CVA returns with the same units/coverage rules as pools. */
   async v2CvaPerformance(
     vaultId: number | bigint | string,
     period: LiquidityPerformancePeriod = "30d",
