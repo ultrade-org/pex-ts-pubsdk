@@ -751,3 +751,47 @@ remove an order before codes 7/8 are ever observed.
 
 Preserve unknown future numeric codes instead of treating them as fills or
 mapping them to a known reason.
+
+## Daily pool statistics from R2
+
+Where publication is enabled, `loadPoolPerformanceBundleFromR2` fetches one daily
+snapshot directly from public storage. This optional aggregate feed does not
+replace your trading backend. Pass the artifact root including its configured
+network prefix; the helper appends `v2/pool-performance/{network}/current.json`.
+No wallet, API token, PEX API fallback, or node access is used.
+
+```ts
+import { loadPoolPerformanceBundleFromR2 } from "@pdex/sdk";
+
+const { bundle, stale } = await loadPoolPerformanceBundleFromR2({
+  publicArtifactBaseUrl, // Public artifact root supplied by the deployment.
+  network: "mainnet",
+});
+const pool = bundle.payloads["market-1"]; // CVA key: `cva-${vaultAppId}`.
+const performance = pool?.performance["30d"];
+const income = pool?.income_apr;
+const returnBps = !stale && performance && !performance.reason
+  ? performance.summary.product_return_bps : null;
+const incomeAprBps = !stale && income?.apr_status === "ready"
+  ? income.total_apr_7d_bps : null;
+// Display unavailable history/status explicitly rather than turning null into 0%.
+```
+
+The bundle contains `7d`, `30d`, `90d`, and `total` performance responses for each
+market/CVA and seven-day fee/yield income APR. Nested fields and units match
+[pool returns and income APR](#pool-returns-and-income-apr), including benchmark,
+gaps, history reasons, null APR, coverage dates, and missing-event counts.
+`insufficient_history` and `no_valid_completed_samples` are valid results.
+
+`as_of` is the UTC midnight cutoff, `updated_at` is generation time, and
+`expires_at` is 36 hours after the cutoff. Publication is targeted at 00:10 UTC.
+The APR window ends at `as_of`; charts contain completed daily observations
+before it. This is dated historical data, not a live quote. Malformed data or
+HTTP/network errors throw; an expired valid object returns `stale: true` so it
+can be displayed with its date and an explicit stale label. The loader preserves
+unknown additional fields. It does not turn non-ready results into zero.
+
+These statistics are unsigned and trusted through HTTPS/storage delivery.
+`manifest_sha256` identifies the deployment context; it is not a signature or
+integrity proof for the data. Availability depends on that deployment's publisher;
+a 404 must not be presented as zero performance.

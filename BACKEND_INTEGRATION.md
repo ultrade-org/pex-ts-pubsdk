@@ -148,3 +148,10 @@ and zero-idle-cash recall paths. Simulate the complete unsigned group, obtain
 the user's signatures, submit through your node and confirm the result.
 Refresh indexed state through at least the confirmation round. A successful
 bootstrap or a green mocked HTTP test does not establish trading readiness.
+
+### Optional daily aggregate statistics
+
+`loadPoolPerformanceBundleFromR2` can consume a deployment's daily pool/CVA
+snapshot from public storage. This is an optional historical analytics feed;
+it does not change the requirement to operate your own trading backend/node.
+See [the loader and availability rules](./INTEGRATION_GUIDE.md#daily-pool-statistics-from-r2).

@@ -1,0 +1,507 @@
+{
+  "schema_version": 1,
+  "type": "v2_pool_performance_bundle_current",
+  "network": "testnet",
+  "data_only": true,
+  "current_path": "v2/pool-performance/testnet/current.json",
+  "manifest_sha256": "abababababababababababababababababababababababababababababababab",
+  "as_of": 1792454400,
+  "updated_at": 1792455000,
+  "expires_at": 1792584000,
+  "source_round": 500,
+  "payloads": {
+    "market-7": {
+      "performance": {
+        "7d": {
+          "schema_version": 1,
+          "product_kind": "market_pool",
+          "product_id": "7",
+          "period": "7d",
+          "sample_interval_seconds": 86400,
+          "benchmark": {
+            "kind": "geometric_mean_50_50",
+            "long_asset_id": 1,
+            "short_asset_id": 2
+          },
+          "summary": {
+            "product_return_bps": -200,
+            "hold_return_bps": 0,
+            "vs_holding_bps": -200
+          },
+          "points": [
+            {
+              "timestamp": 1792195200,
+              "share_price_usd": "1000000",
+              "product_index": 1000000,
+              "hold_index": 1000000,
+              "gap_before": false
+            },
+            {
+              "timestamp": 1792368000,
+              "share_price_usd": "980000",
+              "product_index": 980000,
+              "hold_index": 1000000,
+              "gap_before": true
+            }
+          ]
+        },
+        "30d": {
+          "schema_version": 1,
+          "product_kind": "market_pool",
+          "product_id": "7",
+          "period": "30d",
+          "sample_interval_seconds": 86400,
+          "benchmark": {
+            "kind": "geometric_mean_50_50",
+            "long_asset_id": 1,
+            "short_asset_id": 2
+          },
+          "summary": {
+            "product_return_bps": -1090,
+            "hold_return_bps": 0,
+            "vs_holding_bps": -1090
+          },
+          "points": [
+            {
+              "timestamp": 1791763200,
+              "share_price_usd": "1100000",
+              "product_index": 1000000,
+              "hold_index": 1000000,
+              "gap_before": false
+            },
+            {
+              "timestamp": 1792195200,
+              "share_price_usd": "1000000",
+              "product_index": 909090,
+              "hold_index": 1000000,
+              "gap_before": true
+            },
+            {
+              "timestamp": 1792368000,
+              "share_price_usd": "980000",
+              "product_index": 890909,
+              "hold_index": 1000000,
+              "gap_before": true
+            }
+          ]
+        },
+        "90d": {
+          "schema_version": 1,
+          "product_kind": "market_pool",
+          "product_id": "7",
+          "period": "90d",
+          "sample_interval_seconds": 86400,
+          "benchmark": {
+            "kind": "geometric_mean_50_50",
+            "long_asset_id": 1,
+            "short_asset_id": 2
+          },
+          "summary": {
+            "product_return_bps": -666,
+            "hold_return_bps": 0,
+            "vs_holding_bps": -666
+          },
+          "points": [
+            {
+              "timestamp": 1788998400,
+              "share_price_usd": "1050000",
+              "product_index": 1000000,
+              "hold_index": 1000000,
+              "gap_before": false
+            },
+            {
+              "timestamp": 1791763200,
+              "share_price_usd": "1100000",
+              "product_index": 1047619,
+              "hold_index": 1000000,
+              "gap_before": true
+            },
+            {
+              "timestamp": 1792195200,
+              "share_price_usd": "1000000",
+              "product_index": 952380,
+              "hold_index": 1000000,
+              "gap_before": true
+            },
+            {
+              "timestamp": 1792368000,
+              "share_price_usd": "980000",
+              "product_index": 933333,
+              "hold_index": 1000000,
+              "gap_before": true
+            }
+          ]
+        },
+        "total": {
+          "schema_version": 1,
+          "product_kind": "market_pool",
+          "product_id": "7",
+          "period": "total",
+          "sample_interval_seconds": 86400,
+          "benchmark": {
+            "kind": "geometric_mean_50_50",
+            "long_asset_id": 1,
+            "short_asset_id": 2
+          },
+          "summary": {
+            "product_return_bps": -666,
+            "hold_return_bps": 0,
+            "vs_holding_bps": -666
+          },
+          "points": [
+            {
+              "timestamp": 1788998400,
+              "share_price_usd": "1050000",
+              "product_index": 1000000,
+              "hold_index": 1000000,
+              "gap_before": false
+            },
+            {
+              "timestamp": 1791763200,
+              "share_price_usd": "1100000",
+              "product_index": 1047619,
+              "hold_index": 1000000,
+              "gap_before": true
+            },
+            {
+              "timestamp": 1792195200,
+              "share_price_usd": "1000000",
+              "product_index": 952380,
+              "hold_index": 1000000,
+              "gap_before": true
+            },
+            {
+              "timestamp": 1792368000,
+              "share_price_usd": "980000",
+              "product_index": 933333,
+              "hold_index": 1000000,
+              "gap_before": true
+            }
+          ]
+        }
+      },
+      "income_apr": {
+        "apr_basis": "historical_capital_v1",
+        "apr_status": "ready",
+        "apr_missing_events": 0,
+        "apr_window_start": 1791849600,
+        "apr_window_end": 1792454400,
+        "apr_coverage_start": 1788998400,
+        "fee_usd_7d": 1000000,
+        "fee_apr_7d_bps": 5214,
+        "yield_usd_7d": 500000,
+        "yield_apr_7d_bps": 2607,
+        "total_apr_7d_bps": 7821
+      }
+    },
+    "market-8": {
+      "performance": {
+        "7d": {
+          "schema_version": 1,
+          "product_kind": "market_pool",
+          "product_id": "8",
+          "period": "7d",
+          "sample_interval_seconds": 86400,
+          "benchmark": {
+            "kind": "single_asset",
+            "long_asset_id": 2,
+            "short_asset_id": 0
+          },
+          "summary": {
+            "product_return_bps": -200,
+            "hold_return_bps": 0,
+            "vs_holding_bps": -200
+          },
+          "points": [
+            {
+              "timestamp": 1792195200,
+              "share_price_usd": "1000000",
+              "product_index": 1000000,
+              "hold_index": 1000000,
+              "gap_before": false
+            },
+            {
+              "timestamp": 1792368000,
+              "share_price_usd": "980000",
+              "product_index": 980000,
+              "hold_index": 1000000,
+              "gap_before": true
+            }
+          ]
+        },
+        "30d": {
+          "schema_version": 1,
+          "product_kind": "market_pool",
+          "product_id": "8",
+          "period": "30d",
+          "sample_interval_seconds": 86400,
+          "benchmark": {
+            "kind": "single_asset",
+            "long_asset_id": 2,
+            "short_asset_id": 0
+          },
+          "summary": {
+            "product_return_bps": -1090,
+            "hold_return_bps": 0,
+            "vs_holding_bps": -1090
+          },
+          "points": [
+            {
+              "timestamp": 1791763200,
+              "share_price_usd": "1100000",
+              "product_index": 1000000,
+              "hold_index": 1000000,
+              "gap_before": false
+            },
+            {
+              "timestamp": 1792195200,
+              "share_price_usd": "1000000",
+              "product_index": 909090,
+              "hold_index": 1000000,
+              "gap_before": true
+            },
+            {
+              "timestamp": 1792368000,
+              "share_price_usd": "980000",
+              "product_index": 890909,
+              "hold_index": 1000000,
+              "gap_before": true
+            }
+          ]
+        },
+        "90d": {
+          "schema_version": 1,
+          "product_kind": "market_pool",
+          "product_id": "8",
+          "period": "90d",
+          "sample_interval_seconds": 86400,
+          "benchmark": {
+            "kind": "single_asset",
+            "long_asset_id": 2,
+            "short_asset_id": 0
+          },
+          "summary": {
+            "product_return_bps": -666,
+            "hold_return_bps": 0,
+            "vs_holding_bps": -666
+          },
+          "points": [
+            {
+              "timestamp": 1788998400,
+              "share_price_usd": "1050000",
+              "product_index": 1000000,
+              "hold_index": 1000000,
+              "gap_before": false
+            },
+            {
+              "timestamp": 1791763200,
+              "share_price_usd": "1100000",
+              "product_index": 1047619,
+              "hold_index": 1000000,
+              "gap_before": true
+            },
+            {
+              "timestamp": 1792195200,
+              "share_price_usd": "1000000",
+              "product_index": 952380,
+              "hold_index": 1000000,
+              "gap_before": true
+            },
+            {
+              "timestamp": 1792368000,
+              "share_price_usd": "980000",
+              "product_index": 933333,
+              "hold_index": 1000000,
+              "gap_before": true
+            }
+          ]
+        },
+        "total": {
+          "schema_version": 1,
+          "product_kind": "market_pool",
+          "product_id": "8",
+          "period": "total",
+          "sample_interval_seconds": 86400,
+          "benchmark": {
+            "kind": "single_asset",
+            "long_asset_id": 2,
+            "short_asset_id": 0
+          },
+          "summary": {
+            "product_return_bps": -666,
+            "hold_return_bps": 0,
+            "vs_holding_bps": -666
+          },
+          "points": [
+            {
+              "timestamp": 1788998400,
+              "share_price_usd": "1050000",
+              "product_index": 1000000,
+              "hold_index": 1000000,
+              "gap_before": false
+            },
+            {
+              "timestamp": 1791763200,
+              "share_price_usd": "1100000",
+              "product_index": 1047619,
+              "hold_index": 1000000,
+              "gap_before": true
+            },
+            {
+              "timestamp": 1792195200,
+              "share_price_usd": "1000000",
+              "product_index": 952380,
+              "hold_index": 1000000,
+              "gap_before": true
+            },
+            {
+              "timestamp": 1792368000,
+              "share_price_usd": "980000",
+              "product_index": 933333,
+              "hold_index": 1000000,
+              "gap_before": true
+            }
+          ]
+        }
+      },
+      "income_apr": {
+        "apr_basis": "historical_capital_v1",
+        "apr_status": "building",
+        "apr_missing_events": 0,
+        "apr_window_start": 1791849600,
+        "apr_window_end": 1792454400,
+        "apr_coverage_start": 1788998400,
+        "fee_usd_7d": 0,
+        "fee_apr_7d_bps": null,
+        "yield_usd_7d": 0,
+        "yield_apr_7d_bps": null,
+        "total_apr_7d_bps": null
+      }
+    },
+    "cva-77": {
+      "performance": {
+        "7d": {
+          "schema_version": 1,
+          "product_kind": "cva",
+          "product_id": "77",
+          "period": "7d",
+          "sample_interval_seconds": 86400,
+          "benchmark": {
+            "kind": "geometric_mean_50_50",
+            "long_asset_id": 1,
+            "short_asset_id": 2
+          },
+          "summary": {
+            "product_return_bps": 0,
+            "hold_return_bps": 0,
+            "vs_holding_bps": 0
+          },
+          "points": [
+            {
+              "timestamp": 1792368000,
+              "share_price_usd": "980000",
+              "product_index": 1000000,
+              "hold_index": 1000000,
+              "gap_before": false
+            }
+          ],
+          "reason": "insufficient_history"
+        },
+        "30d": {
+          "schema_version": 1,
+          "product_kind": "cva",
+          "product_id": "77",
+          "period": "30d",
+          "sample_interval_seconds": 86400,
+          "benchmark": {
+            "kind": "geometric_mean_50_50",
+            "long_asset_id": 1,
+            "short_asset_id": 2
+          },
+          "summary": {
+            "product_return_bps": 0,
+            "hold_return_bps": 0,
+            "vs_holding_bps": 0
+          },
+          "points": [
+            {
+              "timestamp": 1792368000,
+              "share_price_usd": "980000",
+              "product_index": 1000000,
+              "hold_index": 1000000,
+              "gap_before": false
+            }
+          ],
+          "reason": "insufficient_history"
+        },
+        "90d": {
+          "schema_version": 1,
+          "product_kind": "cva",
+          "product_id": "77",
+          "period": "90d",
+          "sample_interval_seconds": 86400,
+          "benchmark": {
+            "kind": "geometric_mean_50_50",
+            "long_asset_id": 1,
+            "short_asset_id": 2
+          },
+          "summary": {
+            "product_return_bps": 0,
+            "hold_return_bps": 0,
+            "vs_holding_bps": 0
+          },
+          "points": [
+            {
+              "timestamp": 1792368000,
+              "share_price_usd": "980000",
+              "product_index": 1000000,
+              "hold_index": 1000000,
+              "gap_before": false
+            }
+          ],
+          "reason": "insufficient_history"
+        },
+        "total": {
+          "schema_version": 1,
+          "product_kind": "cva",
+          "product_id": "77",
+          "period": "total",
+          "sample_interval_seconds": 86400,
+          "benchmark": {
+            "kind": "geometric_mean_50_50",
+            "long_asset_id": 1,
+            "short_asset_id": 2
+          },
+          "summary": {
+            "product_return_bps": 0,
+            "hold_return_bps": 0,
+            "vs_holding_bps": 0
+          },
+          "points": [
+            {
+              "timestamp": 1792368000,
+              "share_price_usd": "980000",
+              "product_index": 1000000,
+              "hold_index": 1000000,
+              "gap_before": false
+            }
+          ],
+          "reason": "insufficient_history"
+        }
+      },
+      "income_apr": {
+        "apr_basis": "historical_capital_v1",
+        "apr_status": "building",
+        "apr_missing_events": 0,
+        "apr_window_start": 1791849600,
+        "apr_window_end": 1792454400,
+        "apr_coverage_start": 1788998400,
+        "fee_usd_7d": 0,
+        "fee_apr_7d_bps": null,
+        "yield_usd_7d": 0,
+        "yield_apr_7d_bps": null,
+        "total_apr_7d_bps": null
+      }
+    }
+  }
+}

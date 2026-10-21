@@ -36,6 +36,10 @@ decode or verify it, and pass its bytes unchanged to transaction builders.
 | `@pdex/sdk/externalYield` | External yield-provider state and resource helpers. |
 | `@pdex/sdk/transactions` | App-call descriptors, Algorand groups, signer-aware fee preparation, unsigned simulation envelopes and signed-body validation. |
 
+`loadPoolPerformanceBundleFromR2` reads optional unsigned daily market/CVA
+statistics from R2 without API credentials. It returns `{ bundle, stale }`;
+see [daily pool statistics](./INTEGRATION_GUIDE.md#daily-pool-statistics-from-r2).
+
 ## Capability guarantees
 
 The supported integration surface includes:

@@ -52,6 +52,7 @@ const expectedScriptFiles = [
 ];
 
 const expectedTestFiles = [
+  "pool-performance-r2.test.ts",
   "storage-credit.test.ts",
   "action-recall.test.ts",
   "api.test.ts",
@@ -81,6 +82,7 @@ const expectedTestFiles = [
 ];
 
 const expectedFixtureFiles = [
+  "v2_pool_performance_bundle_v1.json",
   "v2-admission-liquidation-consistency-v1.json",
   "v2-adl-survivor-policy-v1.json",
   "v2-cva-active-mark-withdraw-v1.json",

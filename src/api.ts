@@ -924,3 +924,142 @@ function canonicalJsonValue(value: unknown): unknown {
   }
   return value;
 }
+
+/** Daily HTTPS/R2 statistics; these values are not signed or suitable as execution quotes. */
+export interface V2PublishedLiquidityPerformanceResponse extends BackendStateRecord {
+  schema_version: 1;
+  product_kind: "market_pool" | "cva";
+  product_id: string | number;
+  period: LiquidityPerformancePeriod;
+  sample_interval_seconds: number;
+  benchmark: BackendStateRecord & { kind: string; long_asset_id: number; short_asset_id: number };
+  summary: BackendStateRecord & { product_return_bps: number; hold_return_bps: number; vs_holding_bps: number };
+  points: (BackendStateRecord & {
+    timestamp: number; share_price_usd: string | number;
+    product_index: number; hold_index: number; gap_before: boolean;
+  })[];
+  reason?: string;
+}
+
+export interface V2PoolIncomeApr extends BackendStateRecord {
+  fee_apr_7d_bps: number | null;
+  yield_apr_7d_bps: number | null;
+  total_apr_7d_bps: number | null;
+  fee_usd_7d: string | number;
+  yield_usd_7d: string | number;
+  apr_status: string;
+  apr_basis: string;
+  apr_window_start: number;
+  apr_window_end: number;
+  apr_coverage_start: number;
+  apr_missing_events: number;
+}
+
+export interface V2PoolPerformanceBundleResponse extends BackendStateRecord {
+  schema_version: 1;
+  type: "v2_pool_performance_bundle_current";
+  network: string;
+  data_only: true;
+  current_path: string;
+  /** Deployment context, not a signature or integrity proof of these statistics. */
+  manifest_sha256: string;
+  as_of: number;
+  updated_at: number;
+  expires_at: number;
+  source_round: number;
+  payloads: Record<string, BackendStateRecord & {
+    performance: Record<LiquidityPerformancePeriod, V2PublishedLiquidityPerformanceResponse>;
+    income_apr: V2PoolIncomeApr;
+  }>;
+}
+
+export interface LoadPoolPerformanceBundleOptions {
+  /** Public artifact root including its network prefix, when configured. */
+  publicArtifactBaseUrl: string;
+  network: string;
+  fetchImpl?: typeof fetch;
+}
+
+/**
+ * Fetch daily pool statistics in one request, without wallet credentials or an API fallback.
+ * Expired but valid data is returned with stale=true. Malformed data throws.
+ * Check performance.reason and income_apr.apr_status before displaying results.
+ */
+export async function loadPoolPerformanceBundleFromR2(
+  options: LoadPoolPerformanceBundleOptions,
+): Promise<{ bundle: V2PoolPerformanceBundleResponse; stale: boolean }> {
+  if (!/^[a-z0-9-]+$/.test(options.network)) throw new Error("Invalid pool performance network");
+  const base = new URL(options.publicArtifactBaseUrl);
+  if (!["https:", "http:"].includes(base.protocol) || base.username || base.password || base.search || base.hash) {
+    throw new Error("Invalid public artifact base URL");
+  }
+  const path = `v2/pool-performance/${options.network}/current.json`;
+  const response = await (options.fetchImpl ?? fetch)(`${base.href.replace(/\/+$/, "")}/${path}`, {
+    method: "GET", headers: { Accept: "application/json" }, credentials: "omit", cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error(`Pool performance fetch failed: HTTP ${response.status}`);
+  const data: unknown = await response.json();
+  validatePoolPerformanceBundle(data, options.network, path);
+  return { bundle: data, stale: data.expires_at <= Math.floor(Date.now() / 1000) };
+}
+
+function validatePoolPerformanceBundle(
+  value: unknown, network: string, path: string,
+): asserts value is V2PoolPerformanceBundleResponse {
+  const require = (condition: unknown): void => {
+    if (!condition) throw new Error("Invalid pool performance bundle");
+  };
+  const record = (v: unknown): Record<string, unknown> => {
+    require(v !== null && typeof v === "object" && !Array.isArray(v));
+    return v as Record<string, unknown>;
+  };
+  const integer = (v: unknown, minimum = Number.MIN_SAFE_INTEGER): v is number =>
+    typeof v === "number" && Number.isSafeInteger(v) && v >= minimum;
+  const amount = (v: unknown): boolean => integer(v) || typeof v === "string" && /^-?[0-9]+$/.test(v);
+  const b = record(value);
+  require(b.schema_version === 1 && b.type === "v2_pool_performance_bundle_current");
+  require(b.network === network && b.current_path === path && b.data_only === true);
+  require(typeof b.manifest_sha256 === "string" && /^[0-9a-f]{64}$/.test(b.manifest_sha256));
+  for (const field of ["as_of", "updated_at", "expires_at", "source_round"]) require(integer(b[field], 1));
+  const asOf = b.as_of as number;
+  require(asOf % 86400 === 0 && asOf <= (b.updated_at as number)
+    && (b.updated_at as number) < (b.expires_at as number) && b.expires_at === asOf + 36 * 3600);
+  const payloads = record(b.payloads);
+  require(Object.keys(payloads).length > 0);
+  for (const [key, raw] of Object.entries(payloads)) {
+    const match = /^(market|cva)-([1-9][0-9]*)$/.exec(key);
+    require(match);
+    const product = record(raw);
+    const performance = record(product.performance);
+    for (const period of ["7d", "30d", "90d", "total"] as const) {
+      const p = record(performance[period]);
+      require(p.schema_version === 1 && p.product_kind === (match![1] === "market" ? "market_pool" : "cva")
+        && String(p.product_id) === match![2] && p.period === period && p.sample_interval_seconds === 86400);
+      const benchmark = record(p.benchmark);
+      require(typeof benchmark.kind === "string" && integer(benchmark.long_asset_id, 0) && integer(benchmark.short_asset_id, 0));
+      const summary = record(p.summary);
+      for (const field of ["product_return_bps", "hold_return_bps", "vs_holding_bps"]) require(integer(summary[field]));
+      require(p.reason === undefined || typeof p.reason === "string");
+      require(Array.isArray(p.points));
+      let previous = 0;
+      for (const rawPoint of p.points as unknown[]) {
+        const point = record(rawPoint);
+        require(integer(point.timestamp, 1) && point.timestamp > previous && point.timestamp < asOf);
+        previous = point.timestamp as number;
+        require(amount(point.share_price_usd) && integer(point.product_index, 0) && integer(point.hold_index, 0)
+          && typeof point.gap_before === "boolean");
+      }
+    }
+    const income = record(product.income_apr);
+    for (const field of ["fee_apr_7d_bps", "yield_apr_7d_bps", "total_apr_7d_bps"]) {
+      require(income[field] === null || integer(income[field]));
+    }
+    require(amount(income.fee_usd_7d) && amount(income.yield_usd_7d));
+    require(typeof income.apr_status === "string" && typeof income.apr_basis === "string");
+    for (const field of ["apr_window_start", "apr_window_end", "apr_coverage_start", "apr_missing_events"]) {
+      require(integer(income[field], 0));
+    }
+    require(income.apr_window_end === asOf && income.apr_window_start === asOf - 7 * 86400);
+  }
+}

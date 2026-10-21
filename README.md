@@ -5,7 +5,8 @@ wallet experiences on PDex V2.
 
 **Bring your own backend and node.** This is a frontend SDK, not a standalone
 backend. Builders provide the compatible data API and chain infrastructure;
-PEX provides the published R2 oracle/price feed and protocol definitions. Do not use or proxy a
+PEX provides the published R2 oracle/price feed and protocol definitions, plus an
+optional daily aggregate pool-statistics feed where enabled. Do not use or proxy a
 PEX-operated backend API. See [backend integration](./BACKEND_INTEGRATION.md)
 for the required services and current limitations.
 
@@ -52,6 +53,14 @@ your application while continuing to suppress dependency lifecycle scripts:
 ```bash
 npm install --save-exact /path/to/pdex-sdk-0.6.9.tgz --ignore-scripts
 ```
+
+## Updating from 0.6.9 to 0.6.10
+
+Adds `loadPoolPerformanceBundleFromR2` and typed daily performance/income results.
+This optional, unsigned HTTPS feed requires a configured public artifact root;
+it does not use a PEX backend, wallet, or node. Existing APIs and transaction
+builders are unchanged. No integration changes are required unless adopting it.
+See [daily pool statistics](./INTEGRATION_GUIDE.md#daily-pool-statistics-from-r2).
 
 ## Updating from 0.6.8 to 0.6.9
 
